@@ -9,7 +9,7 @@ from amr.utils.pylogger import get_pylogger
 log = get_pylogger(__name__)
     
 
-class AMRDataModule(pl.LightningDataModule):
+class DataModule(pl.LightningDataModule):
 
     def __init__(self, cfg: CfgNode) -> None:
         """
