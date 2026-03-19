@@ -56,8 +56,7 @@ class MyTQDMProgressBar(TQDMProgressBar):
         return bar
 
 
-# @hydra.main(version_base="1.2", config_path=str(root / "vggt_animal/AMR_cluster/amr/configs_hydra"), config_name="train.yaml")
-@hydra.main(version_base="1.2", config_path= "./amr/configs_hydra", config_name="train.yaml")
+@hydra.main(version_base="1.2", config_path= "./prima/configs_hydra", config_name="train.yaml")
 
 def main(cfg: DictConfig) -> Optional[float]:
     datamodule = DataModule(cfg)

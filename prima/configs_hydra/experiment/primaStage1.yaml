@@ -5,10 +5,6 @@ defaults:
 
 GENERAL:
 
-# based on batch = 16
-# Animal3D : 191
-# Control_Animal3D : 517
-# All other 2D : 1874
 
   TOTAL_STEPS: 63_000 
   LOG_STEPS: 63 
@@ -55,6 +51,7 @@ MODEL:
   USE_BIOCLIP_EMBEDDING: True
   BIOCLIP_EMBEDDING:
     EMBED_DIM: 1280  # Match DINOv2 output dimension for token-wise concatenation
+    TYPE: bioclip1
 
   # Enable 2D keypoint embedding (用于初始化，NewBioGuidedSMALPoseDecoder 会动态更新)
   USE_KEYPOINT_EMBEDDING: False

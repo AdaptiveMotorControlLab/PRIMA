@@ -5,16 +5,8 @@ defaults:
 
 GENERAL:
 
-# in total 25593 images
-# based on batch = 16
-# Animal3D : 191
-# Control_Animal3D : 517
-# All other 2D : 1874
-# quadruped2d : 313 for 5k images
-# quadruped2d more: 892 for 14_265 images 892+708 =1600
 
-  # TOTAL_STEPS: 2_000_000  # 700 * 1600 = 1120_000 + 191_000 = 1_311_000 for 700 epochs
-  TOTAL_STEPS: 450_000 # for 700 epochs should be 686_600 = 495_600 + 191_000 = 708 * 700 + 191000, now 708_000 is 730 epochs
+  TOTAL_STEPS: 450_000 
   LOG_STEPS: 533
   VAL_STEPS: 533  
   VAL_EPOCHS: 1
@@ -59,6 +51,7 @@ MODEL:
   USE_BIOCLIP_EMBEDDING: True
   BIOCLIP_EMBEDDING:
     EMBED_DIM: 1280  # Match vit output dimension for token-wise concatenation
+    TYPE: bioclip1
 
   # Enable 2D keypoint embedding
   USE_KEYPOINT_EMBEDDING: False
