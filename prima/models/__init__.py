@@ -1,7 +1,7 @@
-from .amr import AMR
+from .prima import PRIMA
 
 
-def load_amr(checkpoint_path):
+def load_prima(checkpoint_path):
     from pathlib import Path
     from ..configs import get_config
     model_cfg = str(Path(checkpoint_path).parent.parent / '.hydra/config.yaml')
