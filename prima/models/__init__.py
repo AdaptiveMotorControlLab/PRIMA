@@ -38,5 +38,5 @@ def load_prima(checkpoint_path):
         model_cfg.MODEL.BACKBONE.pop('PRETRAINED_WEIGHTS')
         model_cfg.freeze()
 
-    model = AMR.load_from_checkpoint(checkpoint_path, strict=False, cfg=model_cfg, map_location='cpu')
+    model = PRIMA.load_from_checkpoint(checkpoint_path, strict=False, cfg=model_cfg, map_location='cpu')
     return model, model_cfg
