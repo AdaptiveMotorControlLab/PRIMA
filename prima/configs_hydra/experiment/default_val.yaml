@@ -1,0 +1,34 @@
+# @package _global_
+
+DATASETS:
+  ANIMAL3D:
+    ROOT_IMAGE: /home/xiaohang/Xiaohang_workspace/vggt_animal/AniMer/datasets/animal3d/ 
+    JSON_FILE:
+      TEST: /home/xiaohang/Xiaohang_workspace/vggt_animal/AniMer/datasets/animal3d/test.json
+  CONTROL_ANIMAL3D:
+    ROOT_IMAGE: /home/xiaohang/Xiaohang_workspace/vggt_animal/AniMer/datasets/control_animal3dlatest/  
+    JSON_FILE:
+      TEST: /home/xiaohang/Xiaohang_workspace/vggt_animal/AniMer/datasets/control_animal3dlatest/test.json
+  QUADRUPED2D:
+    ROOT_IMAGE: /home/xiaohang/Xiaohang_workspace/vggt_animal/AniMer/datasets/quadruped2d/  
+    JSON_FILE:
+      TEST: /home/xiaohang/Xiaohang_workspace/vggt_animal/AniMer/datasets/quadruped2d/test.json
+  ANIMAL_KINGDOM:
+    ROOT_IMAGE: /home/xiaohang/Xiaohang_workspace/vggt_animal/AniMer/datasets/Animal_Kingdom_test/  
+    JSON_FILE:
+      TEST: /home/xiaohang/Xiaohang_workspace/vggt_animal/AniMer/datasets/Animal_Kingdom_test/test.json
+  CONFIG:
+    SCALE_FACTOR: 0.0
+    ROT_FACTOR: 0
+    TRANS_FACTOR: 0.0
+    COLOR_SCALE: 0.0
+    ROT_AUG_RATE: 0.0
+    TRANS_AUG_RATE: 0.0
+    DO_FLIP: False
+    FLIP_AUG_RATE: 0.0
+    EXTREME_CROP_AUG_RATE: 0.0
+    EXTREME_CROP_AUG_LEVEL: 1
+
+METRIC:
+  PCK_THRESHOLD: [0.10, 0.15]
+    
