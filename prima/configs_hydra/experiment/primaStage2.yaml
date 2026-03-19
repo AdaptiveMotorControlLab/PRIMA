@@ -1,0 +1,120 @@
+# @package _global_
+
+defaults:
+  - default.yaml
+
+GENERAL:
+
+# in total 25593 images
+# based on batch = 16
+# Animal3D : 191
+# Control_Animal3D : 517
+# All other 2D : 1874
+# quadruped2d : 313 for 5k images
+# quadruped2d more: 892 for 14_265 images 892+708 =1600
+
+  # TOTAL_STEPS: 2_000_000  # 700 * 1600 = 1120_000 + 191_000 = 1_311_000 for 700 epochs
+  TOTAL_STEPS: 450_000 # for 700 epochs should be 686_600 = 495_600 + 191_000 = 708 * 700 + 191000, now 708_000 is 730 epochs
+  LOG_STEPS: 533
+  VAL_STEPS: 533  
+  VAL_EPOCHS: 1
+  CHECKPOINT_EPOCHS: 1
+  CHECKPOINT_SAVE_TOP_K: 2
+  NUM_WORKERS: 2
+  PREFETCH_FACTOR: 2
+
+LOSS_WEIGHTS:
+  KEYPOINTS_3D: 0.05  
+  KEYPOINTS_2D: 0.01
+  INTERMEDIATE_KP2D: 0.001
+  INTERMEDIATE_KP3D: 0.001
+  GLOBAL_ORIENT: 0.005  
+  POSE: 0.001  
+  BETAS: 0.0005 
+  TRANSL: 0.0005
+  ADVERSARIAL: 0.0
+  SUPCON: 0.0005
+
+
+TRAIN:
+  LR: 3.75e-6
+  WEIGHT_DECAY: 1e-4
+  BATCH_SIZE: 48
+  LOSS_REDUCTION: mean
+  NUM_TRAIN_SAMPLES: 2
+  NUM_TEST_SAMPLES: 64
+  POSE_2D_NOISE_RATIO: 0.01
+  SMPL_PARAM_NOISE_RATIO: 0.005
+
+MODEL:
+  IMAGE_SIZE: 256
+  IMAGE_MEAN: [0.485, 0.456, 0.406]
+  IMAGE_STD: [0.229, 0.224, 0.225]
+  BACKBONE:
+    TYPE: vith
+    PRETRAINED_WEIGHTS: ./data/amr_vitbb.pth
+    FREEZE: False
+
+  # Enable BioClip embedding
+  USE_BIOCLIP_EMBEDDING: True
+  BIOCLIP_EMBEDDING:
+    EMBED_DIM: 1280  # Match vit output dimension for token-wise concatenation
+
+  # Enable 2D keypoint embedding
+  USE_KEYPOINT_EMBEDDING: False
+  KEYPOINT_EMBEDDING:
+    NUM_KEYPOINTS: 26        # Number of SMAL keypoints
+    KEYPOINT_DIM: 2          # 2D coordinates (x, y)
+    EMBED_DIM: 1280          # Match vit output dimension
+    HIDDEN_DIM: 512          # Hidden layer dimension in MLP
+    TYPE: 'token'            # Use token-based embedding (recommended)
+  
+  SMAL_HEAD:
+    TYPE: new_bio_pose_transformer_decoder    # 使用新版本（SAM3D风格层级更新）
+    IN_CHANNELS: 1280
+    IEF_ITERS: 1
+    
+    # Pose Transformer Decoder configuration
+    DECODER_DIM: 1280
+    NUM_DECODER_LAYERS: 6
+    NUM_HEADS: 8
+    MLP_RATIO: 4.0
+    
+    # Keypoint token configuration (NewBioGuidedSMALPoseDecoder特定)
+    USE_KEYPOINT_2D_TOKENS: True            # 启用2D关键点tokens (SAM3D风格动态更新)
+    USE_KEYPOINT_3D_TOKENS: True            # 启用3D关键点tokens (pelvis归一化)
+    KEYPOINT_TOKEN_UPDATE: True             # 启用层级关键点预测和token更新
+    KP2D_INJECT_IMAGE_FEAT: True            # 关键性配置：grid_sample注入图像特征
+    
+    # Legacy transformer config (kept for compatibility)
+    TRANSFORMER_DECODER:
+      depth: 6
+      heads: 8
+      mlp_dim: 1024
+      dim_head: 64
+      dropout: 0.0
+      emb_dropout: 0.0
+      norm: layer
+      context_dim: 1280
+
+    
+
+DATASETS:
+  ANIMAL3D:
+    ROOT_IMAGE: ./datasets/animal3d/ 
+    JSON_FILE:
+      TRAIN: ./datasets/animal3d/train.json
+      TEST: ./datasets/animal3d/test.json
+    WEIGHT: 1.0
+  CONTROL_ANIMAL3D:
+    ROOT_IMAGE: ./datasets/control_animal3dlatest/  
+    JSON_FILE:
+      TRAIN: ./datasets/control_animal3dlatest/train.json
+      TEST: ./datasets/control_animal3dlatest/test.json
+    WEIGHT: 0.5
+  QUADRUPED2D:
+    ROOT_IMAGE: ./datasets/quadruped2d/  
+    JSON_FILE:
+      TRAIN: ./datasets/quadruped2d/train.json
+      TEST: ./datasets/quadruped2d/test.json
+    WEIGHT: 0.15

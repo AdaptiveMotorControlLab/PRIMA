@@ -1,0 +1,86 @@
+# @package _global_
+
+defaults:
+  - default.yaml
+
+GENERAL:
+
+# based on batch = 16
+# Animal3D : 191
+# Control_Animal3D : 517
+# All other 2D : 1874
+
+  TOTAL_STEPS: 63_000 
+  LOG_STEPS: 63 
+  VAL_STEPS: 63
+  VAL_EPOCHS: 1
+  CHECKPOINT_EPOCHS: 1
+  CHECKPOINT_SAVE_TOP_K: 2
+  NUM_WORKERS: 8
+  PREFETCH_FACTOR: 2
+
+LOSS_WEIGHTS:
+  KEYPOINTS_3D: 0.05  
+  KEYPOINTS_2D: 0.01
+  INTERMEDIATE_KP2D: 0.001
+  INTERMEDIATE_KP3D: 0.001  
+  GLOBAL_ORIENT: 0.005  
+  POSE: 0.001  
+  BETAS: 0.0005 
+  TRANSL: 0.0005
+  ADVERSARIAL: 0.0005
+  SUPCON: 0.0005
+
+
+TRAIN:
+  LR: 3.75e-6
+  WEIGHT_DECAY: 1e-4
+  BATCH_SIZE: 48
+  LOSS_REDUCTION: mean
+  NUM_TRAIN_SAMPLES: 2
+  NUM_TEST_SAMPLES: 64
+  POSE_2D_NOISE_RATIO: 0.01
+  SMPL_PARAM_NOISE_RATIO: 0.005
+
+MODEL:
+  IMAGE_SIZE: 256
+  IMAGE_MEAN: [0.485, 0.456, 0.406]
+  IMAGE_STD: [0.229, 0.224, 0.225]
+  BACKBONE:
+    TYPE: vith
+    PRETRAINED_WEIGHTS: ./data/amr_vitbb.pth
+    FREEZE: False
+
+  # Enable BioClip embedding
+  USE_BIOCLIP_EMBEDDING: True
+  BIOCLIP_EMBEDDING:
+    EMBED_DIM: 1280  # Match DINOv2 output dimension for token-wise concatenation
+
+  # Enable 2D keypoint embedding (用于初始化，NewBioGuidedSMALPoseDecoder 会动态更新)
+  USE_KEYPOINT_EMBEDDING: False
+
+  SMAL_HEAD:
+    TYPE: new_bio_pose_transformer_decoder    # 使用新版本（SAM3D风格层级更新）
+    IN_CHANNELS: 1280
+    IEF_ITERS: 3
+    
+    # Pose Transformer Decoder configuration
+    DECODER_DIM: 1280
+    NUM_DECODER_LAYERS: 6
+    NUM_HEADS: 8
+    MLP_RATIO: 4.0
+    
+    # Keypoint token configuration (NewBioGuidedSMALPoseDecoder特定)
+    USE_KEYPOINT_2D_TOKENS: True            # 启用2D关键点tokens (SAM3D风格动态更新)
+    USE_KEYPOINT_3D_TOKENS: True            # 启用3D关键点tokens (pelvis归一化)
+    KEYPOINT_TOKEN_UPDATE: True             # 启用层级关键点预测和token更新
+    KP2D_INJECT_IMAGE_FEAT: True            # 关键性配置：grid_sample注入图像特征
+    
+
+DATASETS:
+  ANIMAL3D:
+    ROOT_IMAGE: ./datasets/animal3d/ 
+    JSON_FILE:
+      TRAIN: ./datasets/animal3d/train.json
+      TEST: ./datasets/animal3d/test.json
+    WEIGHT: 1.0
