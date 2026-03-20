@@ -52,14 +52,15 @@ pip install deeplabcut
 
 ---
 
+## Demo
+
 ### Checkpoints and data
 
-Place model checkpoints and config under `data/`, download stage-1 checkpoint from here, and stage-3 checkpoint from here, for example:
+Place model checkpoints and config under `data/`, download stage-1 checkpoint from [here](https://drive.google.com/drive/folders/1pwIpYwP3aJ6W2M3-WhEvcFjW38-4j405?usp=drive_link), and stage-3 checkpoint from [here](https://drive.google.com/drive/folders/1DO6idTCORL5G6PLjikRaIjCXmo_-Ut31?usp=drive_link)
 
-- `data/PRIMAS1/checkpoints/s1ckpt.ckpt`
-- Hydra config is expected near checkpoint (as in training output)
+Download SMAL model from [here](https://drive.google.com/drive/folders/1O1tWYimVMA7hEbnwuPyiDWh90tUGoTPB?usp=drive_link), and place under `data/`
 
-Place SMAL model under `data/`:
+Download the pretrained backbone from [here](https://drive.google.com/file/d/1jOJXJVPXnWX7W7vqYVt0joJZr4C8x-Yo/view?usp=drive_link)
 
 ---
 
@@ -71,7 +72,7 @@ Run animal detection + PRIMA 3D pose/shape inference:
 python demo.py \
   --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt \
   --img_folder demo_data/ \
-  --out_folder demo_out
+  --out_folder demo_out/
 ```
 
 Optional:
@@ -103,6 +104,8 @@ Notes:
 ## Training and Evaluation 
 
 ### Dataset Setup
+
+Download dataset from [Animal3D](https://xujiacong.github.io/Animal3D/), [CtrlAni3D](https://github.com/luoxue-star/AniMer?tab=readme-ov-file#training), and [Quadruped80K](https://zenodo.org/records/14016777). 
 
 ### Training 
 
