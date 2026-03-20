@@ -165,6 +165,7 @@ cython_debug/
 
 # Directory
 demo_out/
+demo_out*/
 data/PRIMA*/
 data/backbone.pth
 logs/
