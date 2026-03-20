@@ -1,0 +1,187 @@
+# PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation
+
+This is the official implementation of the approach described in the preprint:
+
+PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation
+Xiaohang Yu, Ti Wang, Mackenzie Weygandt Mathis
+
+
+
+<!-- This repository provides:
+- animal detection + 3D pose/shape inference demo
+- test-time adaptation (TTA) demo with SuperAnimal 2D keypoints
+- training pipeline (Stage 1 / Stage 2)
+- evaluation on configured datasets -->
+
+---
+
+
+## 🚀 TL;DR
+PRIMA creates a 3D quadruped mesh from a single 2D image. It leverages BioCLIP-based biological priors for robust cross-species shape understanding, then applies test-time adaptation with 2D reprojection and auxiliary keypoint guidance to refine SMAL pose and shape predictions. It further uses this adaptation pipeline to build Quadruped3D, a large-scale pseudo-3D dataset with diverse species and poses, achieving state-of-the-art results on Animal3D, CtrlAni3D, Quadruped80K, and Animal Kingdom.
+
+## Installation
+
+### Environment Setup
+
+<!-- > Recommended: Python 3.10 + CUDA-enabled PyTorch. -->
+
+```bash
+git clone <your_repo_url>
+cd PRIMA
+
+conda create -n prima python=3.10 -y
+conda activate prima
+
+# PyTorch (example for CUDA 12.1; change if needed)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# Core dependencies
+pip install numpy opencv-python tqdm yacs hydra-core omegaconf pyrootutils pytorch-lightning einops trimesh pyrender
+
+# Vision/model dependencies used by PRIMA
+pip install timm transformers open-clip-torch
+
+# Detectron2 (pick the wheel matching your torch/cuda)
+# See: https://github.com/facebookresearch/detectron2/blob/main/INSTALL.md
+
+# Optional (for demo_tta.py)
+pip install deeplabcut
+```
+
+---
+
+## Checkpoints and Data
+
+Place model checkpoints and assets under `data/`, for example:
+
+- `data/PRIMAS1/checkpoints/s1ckpt.ckpt`
+- Hydra config is expected near checkpoint (as in training output)
+
+You can test quickly with images in:
+
+- `demo_data/`
+
+---
+
+### Demo (without tta)
+
+Run animal detection + PRIMA 3D pose/shape inference:
+
+```bash
+python demo.py \
+  --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt \
+  --img_folder demo_data/ \
+  --out_folder demo_out
+```
+
+Optional:
+- `--side_view` render side view
+- `--save_mesh` export `.obj`
+
+---
+
+### Demo (with tta)
+
+`demo_tta.py` pipeline:
+1. Detect animals with Detectron2
+2. Run PRIMA for initial 3D pose/shape
+3. Run DeepLabCut SuperAnimal for 2D keypoints
+4. Map SuperAnimal 39 keypoints to PRIMA 26 keypoints
+5. Run TTA with user-defined `lr` and `num_iters`
+6. Save before/after renderings and (optionally) meshes
+
+Example:
+
+```bash
+python demo_tta.py \
+  --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt \
+  --img_path demo_data/000000101684_zebra.png \
+  --out_folder demo_out_tta \
+  --tta_lr 1e-6 \
+  --tta_num_iters 30
+```
+
+Batch folder:
+
+```bash
+python demo_tta.py \
+  --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt \
+  --img_folder demo_data/ \
+  --out_folder demo_out_tta
+```
+
+Notes:
+- `.obj` is exported only when `--save_mesh` is provided.
+- 26-keypoint visualization is saved as `*_prima26_kpts.png`.
+
+---
+
+
+## Training and Evaluation 
+
+### Dataset Setup
+
+### Training 
+
+Two-stage training script:
+
+```bash
+bash train.sh
+```
+
+<!-- This launches:
+- Stage 1: `experiment=primaStage1`
+- Stage 2: `experiment=primaStage2`
+
+Main configs:
+- `prima/configs_hydra/train.yaml`
+- `prima/configs_hydra/experiment/primaStage1.yaml`
+- `prima/configs_hydra/experiment/primaStage2.yaml` -->
+
+Training outputs are written to `logs/train/runs/<exp_name>/`.
+
+
+### Evaluation
+
+```bash
+python eval.py \
+  --config data/PRIMAS1/.hydra/config.yaml \
+  --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt \
+  --dataset ALL
+```
+
+Common values for `--dataset` are controlled by:
+- `prima/configs_hydra/experiment/default_val.yaml`
+
+---
+
+
+## Acknowledgements
+
+This release builds on several open-source projects, including:
+- Detectron2
+- PyTorch Lightning
+- DeepLabCut SuperAnimal
+- AniMer
+- Transformer/backbone ecosystems (timm, Hugging Face Transformers, OpenCLIP)
+
+---
+
+## Citation
+
+If you use this code in your research, please cite our PRIMA paper (update BibTeX here in your final camera-ready release).
+
+```bibtex
+@article{prima_release_2026,
+  title   = {PRIMA},
+  author  = {Anonymous},
+  journal = {arXiv preprint arXiv:XXXX.XXXXX},
+  year    = {2026}
+}
+```
+
+---
+
+## Contact
+
+For issues, please open a GitHub issue in this repository.
