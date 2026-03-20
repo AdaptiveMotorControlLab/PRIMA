@@ -71,7 +71,6 @@ def map_superanimal_to_prima(bodyparts_xyc: np.ndarray) -> np.ndarray:
 
 def save_keypoint_vis(patch_rgb: np.ndarray, kpts_xyc: np.ndarray, save_path: str) -> None:
     vis = (patch_rgb * 255).astype(np.uint8).copy()
-    vis = cv2.cvtColor(vis, cv2.COLOR_RGB2BGR)
     num_kpts = len(kpts_xyc)
 
     for i, (x, y, c) in enumerate(kpts_xyc):
