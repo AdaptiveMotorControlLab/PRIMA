@@ -1,10 +1,12 @@
 # PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation
 
+
 This is the official implementation of the approach described in the preprint:
 
 PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation
 Xiaohang Yu, Ti Wang, Mackenzie Weygandt Mathis
 
+![PRIMA teaser](images/teaser.png)
 
 
 <!-- This repository provides:
@@ -83,12 +85,6 @@ Optional:
 ### Demo (with tta)
 
 `demo_tta.py` pipeline:
-1. Detect animals with Detectron2
-2. Run PRIMA for initial 3D pose/shape
-3. Run DeepLabCut SuperAnimal for 2D keypoints
-4. Map SuperAnimal 39 keypoints to PRIMA 26 keypoints
-5. Run TTA with user-defined `lr` and `num_iters`
-6. Save before/after renderings and (optionally) meshes
 
 Example:
 
@@ -96,7 +92,6 @@ Example:
 python demo_tta.py \
   --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt \
   --img_path demo_data/000000101684_zebra.png \
-  --out_folder demo_out_tta \
   --tta_lr 1e-6 \
   --tta_num_iters 30
 ```
@@ -147,7 +142,6 @@ Training outputs are written to `logs/train/runs/<exp_name>/`.
 python eval.py \
   --config data/PRIMAS1/.hydra/config.yaml \
   --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt \
-  --dataset ALL
 ```
 
 Common values for `--dataset` are controlled by:
@@ -172,11 +166,10 @@ This release builds on several open-source projects, including:
 If you use this code in your research, please cite our PRIMA paper (update BibTeX here in your final camera-ready release).
 
 ```bibtex
-@article{prima_release_2026,
-  title   = {PRIMA},
-  author  = {Anonymous},
-  journal = {arXiv preprint arXiv:XXXX.XXXXX},
-  year    = {2026}
+@misc{yu_prima,
+  title={PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation},
+  author={Xiaohang Yu and Ti Wang and Mackenzie Weygandt Mathis},
+  note={EPFL project page. Update publication year, venue, and links when available.}
 }
 ```
 
