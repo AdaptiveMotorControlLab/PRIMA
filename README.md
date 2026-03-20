@@ -52,16 +52,14 @@ pip install deeplabcut
 
 ---
 
-## Checkpoints and Data
+### Checkpoints and data
 
-Place model checkpoints and assets under `data/`, for example:
+Place model checkpoints and config under `data/`, download stage-1 checkpoint from here, and stage-3 checkpoint from here, for example:
 
 - `data/PRIMAS1/checkpoints/s1ckpt.ckpt`
 - Hydra config is expected near checkpoint (as in training output)
 
-You can test quickly with images in:
-
-- `demo_data/`
+Place SMAL model under `data/`:
 
 ---
 
@@ -84,25 +82,15 @@ Optional:
 
 ### Demo (with tta)
 
-`demo_tta.py` pipeline:
+`demo_tta.py` pipeline, specify learning rate and numbers of iteration:
 
 Example:
 
 ```bash
 python demo_tta.py \
   --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt \
-  --img_path demo_data/000000101684_zebra.png \
   --tta_lr 1e-6 \
   --tta_num_iters 30
-```
-
-Batch folder:
-
-```bash
-python demo_tta.py \
-  --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt \
-  --img_folder demo_data/ \
-  --out_folder demo_out_tta
 ```
 
 Notes:
