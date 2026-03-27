@@ -10,9 +10,6 @@ Gradio interface. The overall logic follows:
 5. Run test-time adaptation (TTA) with user-specified lr and iters.
 6. Render and save before/after TTA results and keypoint visualizations.
 
-References:
-    1. /home/xiaohang/Xiaohang_workspace/vggt_animal/benchmark/AniMer/app.py
-    2. /home/xiaohang/PRIMA_clean/Xiaohang_workspace/PRIMA/demo_tta.py
 """
 
 import os
