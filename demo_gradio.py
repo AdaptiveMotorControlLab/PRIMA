@@ -1,0 +1,405 @@
+"""Gradio demo for PRIMA + SuperAnimal + TTA.
+
+This script wraps the ``demo_tta.py`` pipeline into an interactive
+Gradio interface. The overall logic follows:
+
+1. Given an input image, run Detectron2 to detect animals.
+2. For each detected animal, run PRIMA for 3D pose/shape estimation.
+3. Run DeepLabCut SuperAnimal to obtain 2D keypoints.
+4. Map SuperAnimal 39 keypoints to the 26 PRIMA keypoints.
+5. Run test-time adaptation (TTA) with user-specified lr and iters.
+6. Render and save before/after TTA results and keypoint visualizations.
+
+References:
+    1. /home/xiaohang/Xiaohang_workspace/vggt_animal/benchmark/AniMer/app.py
+    2. /home/xiaohang/PRIMA_clean/Xiaohang_workspace/PRIMA/demo_tta.py
+"""
+
+import os
+import tempfile
+from types import SimpleNamespace
+from pathlib import Path
+from typing import List, Tuple
+
+import cv2
+import gradio as gr
+import numpy as np
+import torch
+import torch.utils.data
+
+import detectron2
+import detectron2.config
+import detectron2.engine
+from detectron2 import model_zoo
+
+from prima.models import load_prima
+from prima.utils import recursive_to
+from prima.datasets.vitdet_dataset import ViTDetDataset
+from prima.utils.renderer import Renderer
+
+# Reuse core utilities from the CLI demo_tta script
+from demo_tta import (
+    ANIMAL_COCO_IDS,
+    denorm_patch_to_rgb,
+    map_superanimal_to_prima,
+    run_superanimal_on_patch,
+    save_keypoint_vis,
+    tta_optimize,
+)
+
+
+# -----------------------------------------------------------------------------
+# Global setup: model, renderer, detector
+# -----------------------------------------------------------------------------
+
+# Default checkpoint path following README instructions
+DEFAULT_CHECKPOINT = "data/PRIMAS1/checkpoints/s1ckpt.ckpt"
+
+# Output folder for rendered images/meshes and keypoints
+OUT_FOLDER = "demo_out_tta_gradio"
+os.makedirs(OUT_FOLDER, exist_ok=True)
+
+
+def _load_prima_model(checkpoint_path: str = DEFAULT_CHECKPOINT):
+    """Load PRIMA model and renderer once for the Gradio app."""
+
+    model, model_cfg = load_prima(checkpoint_path)
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    model = model.to(device)
+    model.eval()
+
+    renderer = Renderer(model_cfg, faces=model.smal.faces)
+    return model, model_cfg, renderer, device
+
+
+def _build_detector():
+    """Build Detectron2 animal detector (same config as demo_tta/demo.py)."""
+
+    cfg = detectron2.config.get_cfg()
+    cfg.merge_from_file(
+        model_zoo.get_config_file("COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml")
+    )
+    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5
+    cfg.MODEL.WEIGHTS = (
+        "https://dl.fbaipublicfiles.com/detectron2/COCO-Detection/"
+        "faster_rcnn_X_101_32x8d_FPN_3x/139173657/model_final_68b088.pkl"
+    )
+    detector = detectron2.engine.DefaultPredictor(cfg)
+    return detector
+
+
+MODEL, MODEL_CFG, RENDERER, DEVICE = _load_prima_model()
+DETECTOR = _build_detector()
+
+
+# SuperAnimal defaults (same as in demo_tta parser)
+SUPER_ANIMAL_ARGS = SimpleNamespace(
+    superanimal_name="superanimal_quadruped",
+    superanimal_model_name="hrnet_w32",
+    superanimal_detector_name="fasterrcnn_resnet50_fpn_v2",
+    superanimal_max_individuals=1,
+)
+
+
+def _collect_animal_results(
+    img_rgb: np.ndarray,
+    tta_lr: float,
+    tta_num_iters: int,
+    det_thresh: float,
+    kp_conf_thresh: float,
+    side_view: bool,
+    save_mesh: bool,
+) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray], str | None, str | None]:
+    """Run detection + PRIMA + SuperAnimal + TTA on a single RGB image.
+
+    Returns:
+        before_imgs: list of HxWx3 RGB images (before TTA) for all animals
+        after_imgs: list of HxWx3 RGB images (after TTA) for all animals
+        kpt_imgs: list of HxWx3 RGB keypoint visualizations
+        first_before_mesh: path to first animal's before-TTA mesh (.obj) or None
+        first_after_mesh: path to first animal's after-TTA mesh (.obj) or None
+    """
+
+    # Detect animals
+    det_out = DETECTOR(img_rgb)
+    det_instances = det_out["instances"]
+
+    valid_idx = [
+        i
+        for i, (c, s) in enumerate(zip(det_instances.pred_classes, det_instances.scores))
+        if (int(c) in ANIMAL_COCO_IDS) and (float(s) > float(det_thresh))
+    ]
+    if len(valid_idx) == 0:
+        return [], [], [], None, None
+
+    boxes = det_instances.pred_boxes.tensor[valid_idx].cpu().numpy()
+
+    dataset = ViTDetDataset(MODEL_CFG, img_rgb, boxes)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
+
+    before_imgs: List[np.ndarray] = []
+    after_imgs: List[np.ndarray] = []
+    kpt_imgs: List[np.ndarray] = []
+    before_mesh_paths: List[str] = []
+    after_mesh_paths: List[str] = []
+
+    img_token = next(tempfile._get_candidate_names())
+
+    for batch in dataloader:
+        batch = recursive_to(batch, DEVICE)
+
+        with torch.no_grad():
+            out_before = MODEL(batch)
+
+        animal_id = int(batch["animalid"][0])
+
+        # Save/render before TTA
+        img_fn = f"{img_token}"
+        from demo_tta import render_and_save  # imported lazily to avoid circular issues
+
+        render_and_save(
+            RENDERER,
+            out_before,
+            batch,
+            img_fn,
+            animal_id,
+            OUT_FOLDER,
+            suffix="before_tta",
+            side_view=side_view,
+            save_mesh=save_mesh,
+        )
+
+        before_png_path = os.path.join(OUT_FOLDER, f"{img_fn}_{animal_id}_before_tta.png")
+        if os.path.exists(before_png_path):
+            before_bgr = cv2.imread(before_png_path)
+            if before_bgr is not None:
+                before_imgs.append(cv2.cvtColor(before_bgr, cv2.COLOR_BGR2RGB))
+
+        if save_mesh:
+            before_obj_path = os.path.join(OUT_FOLDER, f"{img_fn}_{animal_id}_before_tta.obj")
+            if os.path.exists(before_obj_path):
+                before_mesh_paths.append(before_obj_path)
+
+        # Prepare patch for SuperAnimal
+        patch_rgb = denorm_patch_to_rgb(batch["img"][0])
+        with tempfile.TemporaryDirectory(prefix=f"dlc_{img_fn}_{animal_id}_") as tmp_dir:
+            bodyparts_xyc = run_superanimal_on_patch(patch_rgb, SUPER_ANIMAL_ARGS, tmp_dir)
+
+        if bodyparts_xyc is None:
+            # No keypoints => skip TTA for this animal
+            continue
+
+        mapped_xyc = map_superanimal_to_prima(bodyparts_xyc)
+        mapped_xyc[mapped_xyc[:, 2] < float(kp_conf_thresh), 2] = 0.0
+
+        # Save keypoint visualization and npy
+        kpt_png_path = os.path.join(OUT_FOLDER, f"{img_fn}_{animal_id}_prima26_kpts.png")
+        save_keypoint_vis(patch_rgb, mapped_xyc, kpt_png_path)
+        npy_path = os.path.join(OUT_FOLDER, f"{img_fn}_{animal_id}_prima26_kpts.npy")
+        np.save(npy_path, mapped_xyc)
+
+        if os.path.exists(kpt_png_path):
+            kpt_bgr = cv2.imread(kpt_png_path)
+            if kpt_bgr is not None:
+                kpt_imgs.append(cv2.cvtColor(kpt_bgr, cv2.COLOR_BGR2RGB))
+
+        # Normalize keypoints to [-0.5, 0.5] as in demo_tta
+        patch_h, patch_w = patch_rgb.shape[:2]
+        mapped_norm = mapped_xyc.copy()
+        mapped_norm[:, 0] = mapped_norm[:, 0] / float(patch_w) - 0.5
+        mapped_norm[:, 1] = mapped_norm[:, 1] / float(patch_h) - 0.5
+        gt_kpts_norm = torch.from_numpy(mapped_norm[None]).to(device=DEVICE, dtype=batch["img"].dtype)
+
+        # Run TTA
+        out_after = tta_optimize(
+            MODEL,
+            batch,
+            gt_kpts_norm,
+            num_iters=int(tta_num_iters),
+            lr=float(tta_lr),
+        )
+
+        render_and_save(
+            RENDERER,
+            out_after,
+            batch,
+            img_fn,
+            animal_id,
+            OUT_FOLDER,
+            suffix="after_tta",
+            side_view=side_view,
+            save_mesh=save_mesh,
+        )
+
+        after_png_path = os.path.join(OUT_FOLDER, f"{img_fn}_{animal_id}_after_tta.png")
+        if os.path.exists(after_png_path):
+            after_bgr = cv2.imread(after_png_path)
+            if after_bgr is not None:
+                after_imgs.append(cv2.cvtColor(after_bgr, cv2.COLOR_BGR2RGB))
+
+        if save_mesh:
+            after_obj_path = os.path.join(OUT_FOLDER, f"{img_fn}_{animal_id}_after_tta.obj")
+            if os.path.exists(after_obj_path):
+                after_mesh_paths.append(after_obj_path)
+
+    first_before_mesh = before_mesh_paths[0] if before_mesh_paths else None
+    first_after_mesh = after_mesh_paths[0] if after_mesh_paths else None
+
+    return before_imgs, after_imgs, kpt_imgs, first_before_mesh, first_after_mesh
+
+
+def gradio_inference(
+    image: np.ndarray,
+    tta_lr: float,
+    tta_num_iters: int,
+    det_thresh: float,
+    kp_conf_thresh: float,
+    side_view: bool,
+    save_mesh: bool,
+):
+    """Wrapper for Gradio.
+
+    Args are directly controlled from the UI. ``image`` is an RGB numpy array.
+    """
+
+    if image is None:
+        return [], [], [], None, None
+
+    # Ensure uint8 RGB
+    if image.dtype != np.uint8:
+        img_rgb = np.clip(image, 0, 255).astype(np.uint8)
+    else:
+        img_rgb = image
+
+    before_imgs, after_imgs, kpt_imgs, mesh_before, mesh_after = _collect_animal_results(
+        img_rgb,
+        tta_lr=tta_lr,
+        tta_num_iters=tta_num_iters,
+        det_thresh=det_thresh,
+        kp_conf_thresh=kp_conf_thresh,
+        side_view=side_view,
+        save_mesh=save_mesh,
+    )
+
+    return before_imgs, after_imgs, kpt_imgs, mesh_before, mesh_after
+
+
+demo = gr.Interface(
+    fn=gradio_inference,
+    analytics_enabled=False,
+    inputs=[
+        gr.Image(
+            label="Input image",
+            type="numpy",
+            sources=["upload", "clipboard"],
+        ),
+        gr.Slider(
+            label="TTA learning rate",
+            minimum=1e-7,
+            maximum=1e-4,
+            value=1e-6,
+            step=1e-7,
+        ),
+        gr.Slider(
+            label="TTA iterations",
+            minimum=1,
+            maximum=100,
+            value=30,
+            step=1,
+        ),
+        gr.Slider(
+            label="Detection threshold",
+            minimum=0.3,
+            maximum=0.9,
+            value=0.7,
+            step=0.05,
+        ),
+        gr.Slider(
+            label="Keypoint confidence threshold",
+            minimum=0.0,
+            maximum=1.0,
+            value=0.1,
+            step=0.05,
+        ),
+        gr.Checkbox(label="Render side view", value=False),
+        gr.Checkbox(label="Save meshes (.obj)", value=True),
+    ],
+    outputs=[
+        gr.Gallery(label="Before TTA (all animals)"),
+        gr.Gallery(label="After TTA (all animals)"),
+        gr.Gallery(label="PRIMA 26 keypoints"),
+        gr.Model3D(label="First animal mesh before TTA"),
+        gr.Model3D(label="First animal mesh after TTA"),
+    ],
+    title="PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation",
+    description=(
+        "Upload an animal image. The demo runs Detectron2 for animal detection, "
+        "PRIMA for 3D pose/shape, DeepLabCut SuperAnimal for 2D keypoints, and "
+        "test-time adaptation (TTA) with configurable learning rate and iterations.\n\n"
+        "Results (PNG/OBJ and 26-keypoint visualizations) are saved under "
+        f"'{OUT_FOLDER}'."
+    ),
+    # For multiple input components, each example must be a list
+    # matching the number and order of inputs.
+    examples=[
+        [
+            "demo_data/000000015956_horse.png",  # image
+            1e-6,  # tta_lr
+            30,    # tta_num_iters
+            0.7,   # det_thresh
+            0.1,   # kp_conf_thresh
+            False, # side_view
+            True,  # save_mesh
+        ],
+        [
+            "demo_data/n02101388_1188.png",
+            1e-6,
+            30,
+            0.7,
+            0.1,
+            False,
+            True,
+        ],
+        [
+            "demo_data/n02412080_12159.png",
+            1e-6,
+            30,
+            0.7,
+            0.1,
+            False,
+            True,
+        ],
+        [
+            "demo_data/000000101684_zebra.png",
+            1e-6,
+            30,
+            0.7,
+            0.1,
+            False,
+            True,
+        ],
+        # big / hati examples without TTA (iterations = 0)
+        [
+            "demo_data/big.jpg",
+            1e-6,
+            0,     # no TTA
+            0.7,
+            0.1,
+            False,
+            True,
+        ],
+        [
+            "demo_data/hati.jpg",
+            1e-6,
+            0,     # no TTA
+            0.7,
+            0.1,
+            False,
+            True,
+        ],
+    ],
+)
+
+
+if __name__ == "__main__":
+    demo.launch()
