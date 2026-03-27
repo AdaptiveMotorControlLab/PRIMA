@@ -45,6 +45,7 @@ pip install timm transformers open-clip-torch
 
 # Detectron2 (pick the wheel matching your torch/cuda)
 # See: https://github.com/facebookresearch/detectron2/blob/main/INSTALL.md
+python -m pip install --no-build-isolation "git+https://github.com/facebookresearch/detectron2.git"
 
 # Optional (for demo_tta.py)
 pip install deeplabcut
