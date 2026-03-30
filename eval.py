@@ -27,18 +27,20 @@ def main(args):
             eval_one_dataset(cfg_eval_dataset[key], default_cfg, cfg, model, 
                              evaluator=smal_evaluator, 
                              aug_cfg=aug_cfg, 
-                             key=key)
+                             key=key,
+                             device=args.device)
             print(f"-------{key} Dataset evaluate finish ------")
     else:
         print(f"-------- Evaluate {args.dataset} dataset ------------")
         eval_one_dataset(cfg_eval_dataset[args.dataset], default_cfg, cfg, model, 
                          evaluator=smal_evaluator, 
                          aug_cfg=aug_cfg, 
-                         key=args.dataset)
+                         key=args.dataset,
+                         device=args.device)
         print(f"-------{args.dataset} Dataset evaluate finish ------")
 
 
-def eval_one_dataset(dataset_cfg, default_cfg, cfg, model, evaluator, aug_cfg, key):
+def eval_one_dataset(dataset_cfg, default_cfg, cfg, model, evaluator, aug_cfg, key, device='cuda'):
     dataset = EvaluationDataset(root_image=dataset_cfg['ROOT_IMAGE'], 
                                 json_file=dataset_cfg['JSON_FILE']['TEST'], 
                                 augm_config=aug_cfg, focal_length=cfg.SMAL.get("FOCAL_LENGTH", 1000),
@@ -49,7 +51,7 @@ def eval_one_dataset(dataset_cfg, default_cfg, cfg, model, evaluator, aug_cfg, k
     bar = tqdm(dataloader)
     pa_mpjpe_list, pck_list, auc_list, pa_mpvpe_list = [], [], [], []
     for i, batch in enumerate(bar):
-        batch = recursive_to(batch, args.device)
+        batch = recursive_to(batch, device)
         with torch.no_grad():
             output = model(batch)
 
