@@ -1,3 +1,6 @@
+#!/bin/bash
+set -e
+
 exp_name_stage1=primaStage1
 exp_name_stage2=primaStage2
 experiment1=primaStage1
