@@ -458,11 +458,11 @@ class InterLoss(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        self.use_intermediate_supervision = cfg.LOSS. get('USE_INTERMEDIATE_SUPERVISION', True)
-        self.intermediate_weight = cfg. LOSS.get('INTERMEDIATE_WEIGHT', 0.5)
+        self.use_intermediate_supervision = cfg.LOSS.get('USE_INTERMEDIATE_SUPERVISION', True)
+        self.intermediate_weight = cfg.LOSS.get('INTERMEDIATE_WEIGHT', 0.5)
         
         # 2D keypoint loss
-        self. keypoint_2d_loss = nn.MSELoss(reduction='none')
+        self.keypoint_2d_loss = nn.MSELoss(reduction='none')
         
         # 3D keypoint loss
         self.keypoint_3d_loss = nn.MSELoss(reduction='none')
@@ -502,8 +502,8 @@ class InterLoss(nn.Module):
                 
                 # 计算 loss (只对可见的关键点)
                 loss_2d = self.keypoint_2d_loss(pred_kps_2d_all, gt_kps_2d_repeated)
-                loss_2d = loss_2d. mean(dim=-1)  # [B*num_iters, N]
-                loss_2d = (loss_2d * gt_vis_2d_repeated).sum() / (gt_vis_2d_repeated. sum() + 1e-6)
+                loss_2d = loss_2d.mean(dim=-1)  # [B*num_iters, N]
+                loss_2d = (loss_2d * gt_vis_2d_repeated).sum() / (gt_vis_2d_repeated.sum() + 1e-6)
                 
                 losses['intermediate_keypoints_2d'] = loss_2d * self.intermediate_weight
                 total_loss += losses['intermediate_keypoints_2d']
@@ -520,7 +520,7 @@ class InterLoss(nn.Module):
                     gt_conf_3d = torch.ones_like(gt_kps_3d[:, :, 0])  # 全部有效
                 
                 # 复制 GT
-                num_iters = pred_kps_3d_all. shape[0] // gt_kps_3d.shape[0]
+                num_iters = pred_kps_3d_all.shape[0] // gt_kps_3d.shape[0]
                 gt_kps_3d_repeated = gt_kps_3d.repeat(num_iters, 1, 1)
                 gt_conf_3d_repeated = gt_conf_3d.repeat(num_iters, 1)
                 
