@@ -8,7 +8,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 
 try:  # pragma: no cover - best effort during development
-	__version__ = version("prima")
+	__version__ = version("prima-animal")
 except PackageNotFoundError:  # pragma: no cover
 	__version__ = "0.0.0"
 
