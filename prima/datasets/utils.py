@@ -31,7 +31,7 @@ def expand_to_aspect_ratio(input_shape, target_aspect_ratio=None):
         h_new = h
         w_new = max(h * w_t / h_t, w)
     if h_new < h or w_new < w:
-        breakpoint()
+        raise ValueError(f"Expanded size ({w_new}, {h_new}) smaller than original ({w}, {h})")
     return np.array([w_new, h_new])
 
 
@@ -263,8 +263,8 @@ def generate_image_patch_skimage(img: np.array, c_x: float, c_y: float,
     # Padding so that when rotated proper amount of context is included
     try:
         pad = int(np.linalg.norm(br - ul) / 2 - float(br[1] - ul[1]) / 2) + 1
-    except:
-        breakpoint()
+    except Exception as e:
+        raise RuntimeError(f"Failed to compute pad: ul={ul}, br={br}") from e
     if not rot == 0:
         ul -= pad
         br += pad
@@ -302,14 +302,10 @@ def generate_image_patch_skimage(img: np.array, c_x: float, c_y: float,
         new_img = new_img[pad:-pad, pad:-pad]
 
     if new_img.shape[0] < 1 or new_img.shape[1] < 1:
-        print(f'{img.shape=}')
-        print(f'{new_img.shape=}')
-        print(f'{ul=}')
-        print(f'{br=}')
-        print(f'{pad=}')
-        print(f'{rot=}')
-
-        breakpoint()
+        raise ValueError(
+            f"Image patch too small: {new_img.shape}, original: {img.shape}, "
+            f"ul={ul}, br={br}, pad={pad}, rot={rot}"
+        )
 
     # resize image
     new_img = resize(new_img, res)  # scipy.misc.imresize(new_img, res)
@@ -394,29 +390,29 @@ def fliplr_params(smal_params: Dict, has_smal_params: Dict) -> Tuple[Dict, Dict]
     global_orient = smal_params['global_orient'].copy()
     pose = smal_params['pose'].copy()
     betas = smal_params['betas'].copy()
-    translation = smal_params['translation'].copy()
+    transl = smal_params['transl'].copy()
     has_global_orient = has_smal_params['global_orient'].copy()
     has_pose = has_smal_params['pose'].copy()
     has_betas = has_smal_params['betas'].copy()
-    has_translation = has_smal_params['translation'].copy()
+    has_transl = has_smal_params['transl'].copy()
 
     global_orient[1::3] *= -1
     global_orient[2::3] *= -1
     pose[1::3] *= -1
     pose[2::3] *= -1
-    translation[1::3] *= -1
-    translation[2::3] *= -1
+    transl[1::3] *= -1
+    transl[2::3] *= -1
 
     smal_params = {'global_orient': global_orient.astype(np.float32),
                    'pose': pose.astype(np.float32),
                    'betas': betas.astype(np.float32),
-                   'translation': translation.astype(np.float32)
+                   'transl': transl.astype(np.float32)
                    }
 
     has_smal_params = {'global_orient': has_global_orient,
                        'pose': has_pose,
                        'betas': has_betas,
-                       'translation': has_translation
+                       'transl': has_transl
                        }
 
     return smal_params, has_smal_params
