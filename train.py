@@ -78,7 +78,7 @@ def main(cfg: DictConfig) -> Optional[float]:
         monitor='val/loss',
         mode='min',
         save_top_k=cfg.GENERAL.CHECKPOINT_SAVE_TOP_K,
-        filename="best-{epoch:03d}-{val_loss:.4f}",  # 清晰标记最好的checkpoint
+        filename="best-{epoch:03d}-{val_loss:.4f}",  # Clearly label the best checkpoint
     )
 
     lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval='step')
