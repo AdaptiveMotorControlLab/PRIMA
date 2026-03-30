@@ -36,7 +36,7 @@ def main():
     parser.add_argument('--save_mesh', dest='save_mesh', action='store_true', default=False,
                         help='If set, save meshes to disk also')
     parser.add_argument('--batch_size', type=int, default=1, help='Batch size for inference/fitting')
-    parser.add_argument('--file_type', nargs='+', default=['*.jpg', '*.png', '*JPEG'],
+    parser.add_argument('--file_type', nargs='+', default=['*.jpg', '*.png', '*.JPEG'],
                         help='List of file extensions to consider')
 
     args = parser.parse_args()
@@ -62,11 +62,14 @@ def main():
 
     img_paths = sorted([img for end in args.file_type for img in Path(args.img_folder).glob(end)])
     for img_path in img_paths:
-        img_cv2 = cv2.imread(str(img_path))
-        img_cv2 = cv2.cvtColor(img_cv2, cv2.COLOR_BGR2RGB)
+        img_bgr = cv2.imread(str(img_path))
+        if img_bgr is None:
+            print(f"[WARN] Cannot read image: {img_path}")
+            continue
+        img_cv2 = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 
-        # Detect humans in image
-        det_out = detector(img_cv2)
+        # Detect animals in image
+        det_out = detector(img_bgr)
 
         det_instances = det_out['instances']
         valid_idx = [i for i, (c, s) in enumerate(zip(det_instances.pred_classes, det_instances.scores)) if ((c in [15, 16, 17, 18, 19, 21, 22]) & (s > 0.7))]
@@ -74,7 +77,7 @@ def main():
 
         # Run AniMer on detected animals
         dataset = ViTDetDataset(model_cfg, img_cv2, boxes)
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=8, shuffle=False, num_workers=0)
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
         for batch in tqdm(dataloader):
             batch = recursive_to(batch, device)
             with torch.no_grad():
@@ -119,7 +122,7 @@ def main():
                     final_img = np.concatenate([final_img, side_img], axis=1)
 
                 cv2.imwrite(os.path.join(args.out_folder, f'{img_fn}_{animal_id}.png'), 
-                            cv2.cvtColor((255 * final_img[:, :, ::-1]).astype(np.uint8), cv2.COLOR_RGB2BGR))
+                            cv2.cvtColor((255 * final_img).astype(np.uint8), cv2.COLOR_RGB2BGR))
 
                 # Add all verts and cams to list
                 verts = out['pred_vertices'][n].detach().cpu().numpy()
