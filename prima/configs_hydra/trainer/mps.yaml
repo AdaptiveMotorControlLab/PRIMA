@@ -1,6 +1,6 @@
 defaults:
   - default.yaml
-  - default_hamer.yaml
+  - default_amr.yaml
 
 accelerator: mps
 devices: 1
