@@ -63,7 +63,7 @@ MODEL:
     TYPE: 'token'            # Use token-based embedding (recommended)
   
   SMAL_HEAD:
-    TYPE: new_bio_pose_transformer_decoder    # 使用新版本（SAM3D风格层级更新）
+    TYPE: new_bio_pose_transformer_decoder    # Use the newer version with SAM3D-style hierarchical updates
     IN_CHANNELS: 1280
     IEF_ITERS: 1
     
@@ -73,11 +73,11 @@ MODEL:
     NUM_HEADS: 8
     MLP_RATIO: 4.0
     
-    # Keypoint token configuration (NewBioGuidedSMALPoseDecoder特定)
-    USE_KEYPOINT_2D_TOKENS: True            # 启用2D关键点tokens (SAM3D风格动态更新)
-    USE_KEYPOINT_3D_TOKENS: True            # 启用3D关键点tokens (pelvis归一化)
-    KEYPOINT_TOKEN_UPDATE: True             # 启用层级关键点预测和token更新
-    KP2D_INJECT_IMAGE_FEAT: True            # 关键性配置：grid_sample注入图像特征
+    # Keypoint token configuration specific to NewBioGuidedSMALPoseDecoder
+    USE_KEYPOINT_2D_TOKENS: True            # Enable 2D keypoint tokens with SAM3D-style dynamic updates
+    USE_KEYPOINT_3D_TOKENS: True            # Enable 3D keypoint tokens with pelvis normalization
+    KEYPOINT_TOKEN_UPDATE: True             # Enable hierarchical keypoint prediction and token updates
+    KP2D_INJECT_IMAGE_FEAT: True            # Key setting: inject image features via grid_sample
     
     # Legacy transformer config (kept for compatibility)
     TRANSFORMER_DECODER:
