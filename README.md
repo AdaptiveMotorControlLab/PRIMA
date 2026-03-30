@@ -23,33 +23,68 @@ PRIMA creates a 3D quadruped mesh from a single 2D image. It leverages BioCLIP-b
 
 ## Installation
 
-### Environment Setup
+### Install from PyPI (recommended)
 
-<!-- > Recommended: Python 3.10 + CUDA-enabled PyTorch. -->
+> Recommended: Python 3.10 and a CUDA-enabled PyTorch installation that you manage yourself.
 
 ```bash
-git clone <your_repo_url>
-cd PRIMA
-
 conda create -n prima python=3.10 -y
 conda activate prima
 
-# PyTorch (example for CUDA 12.1; change if needed)
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+# Install PyTorch matching your CUDA (example: CUDA 11.8)
+pip install --index-url https://download.pytorch.org/whl/cu118 \
+    "torch==2.2.1" "torchvision==0.17.1" "torchaudio==2.2.1"
 
-# Core dependencies
-pip install numpy opencv-python tqdm yacs hydra-core omegaconf pyrootutils pytorch-lightning einops trimesh pyrender
-
-# Vision/model dependencies used by PRIMA
-pip install timm transformers open-clip-torch
-
-# Detectron2 (pick the wheel matching your torch/cuda)
-# See: https://github.com/facebookresearch/detectron2/blob/main/INSTALL.md
-python -m pip install --no-build-isolation "git+https://github.com/facebookresearch/detectron2.git"
-
-# Optional (for demo_tta.py)
-pip install deeplabcut
+# Install PRIMA core package (from PyPI / TestPyPI)
+pip install \
+  --index-url https://test.pypi.org/simple/ \
+  --extra-index-url https://pypi.org/simple \
+  prima-animal==0.1.3
 ```
+
+The `prima-animal` package installs most Python dependencies required by PRIMA
+except heavy components such as PyTorch, Detectron2 and PyTorch3D.
+
+### Optional dependencies
+
+The following packages are **not** hard requirements of `prima-animal`, but are
+needed for certain demos or advanced features:
+
+- **Detectron2** – animal detection backbone used in `demo.py` and `demo_tta.py`:
+
+  ```bash
+  # See Detectron2 docs and choose the wheel matching your torch/CUDA
+  python -m pip install --no-build-isolation \
+      "git+https://github.com/facebookresearch/detectron2.git"
+  ```
+
+- **Chumpy** 
+
+  ```bash
+  python -m pip install --no-build-isolation \
+      "git+https://gitclone.com/github.com/mattloper/chumpy.git"
+  ```
+
+- **PyTorch3D** – used for some 3D evaluation and geometry utilities (optional):
+
+  Please follow the official installation instructions and pick a wheel that
+  matches your PyTorch/CUDA setup:
+
+  - https://github.com/facebookresearch/pytorch3d/blob/main/INSTALL.md
+
+  Or install from source using no-build-isolation mode:
+
+  ```bash
+  python -m pip install --no-build-isolation \
+      "git+https://github.com/facebookresearch/pytorch3d.git"
+  ```
+
+- **DeepLabCut / SuperAnimal** – only required when using 2D keypoint TTA in
+  `demo_tta.py`:
+
+  ```bash
+  pip install "deeplabcut@git+https://github.com/DeepLabCut/DeepLabCut.git"
+  ```
 
 ---
 
@@ -98,6 +133,21 @@ python demo_tta.py \
 Notes:
 - `.obj` is exported only when `--save_mesh` is provided.
 - 26-keypoint visualization is saved as `*_prima26_kpts.png`.
+
+---
+
+### Gradio demo
+
+We also provide a simple Gradio-based web demo for interactive testing in the
+browser:
+
+```bash
+python demo_gradio.py \
+  --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt
+```
+
+This will start a local Gradio app (by default on http://127.0.0.1:7860), where
+you can upload images and visualize PRIMA predictions.
 
 ---
 

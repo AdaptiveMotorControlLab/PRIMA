@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 
 if 'PYOPENGL_PLATFORM' not in os.environ:

@@ -4,7 +4,7 @@ import torch
 import pytorch_lightning as pl
 from yacs.config import CfgNode
 from .datasets import OptionAnimalDataset, TrainDataset
-from amr.utils.pylogger import get_pylogger
+from prima.utils.pylogger import get_pylogger
 
 log = get_pylogger(__name__)
     
