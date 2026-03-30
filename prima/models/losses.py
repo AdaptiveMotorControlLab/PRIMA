@@ -325,32 +325,32 @@ class ShapePriorLoss(nn.Module):
 class PrototypeSupConLoss(nn.Module):
     def __init__(self, prototypes_init, feat_dim=128, temperature=0.1):
         """
-        prototypes_init: 预计算好的 (5, 512) BioCLIP 中心
-        feat_dim: 你投影后的 shape_feat 维度 (128)
+        prototypes_init: precomputed (5, 512) BioCLIP family prototypes
+        feat_dim: dimension of the projected shape feature (128)
         """
         super().__init__()
         self.temperature = temperature
         
-        # 这里的 prototypes 应该映射到你投影后的空间
-        # 建议在训练开始时，先将 BioCLIP 中心通过一次你的 Projector 得到初始 Prototype
+        # The prototypes should live in the projected feature space.
+        # A practical setup is to pass the BioCLIP centers through the projector
+        # once at the beginning of training to initialize these prototypes.
         self.register_buffer("prototypes", torch.randn(5, feat_dim))
         
     def forward(self, features, labels):
         """
-        features: (B, 128) - 已经 L2 归一化后的共享特征或 shape_feat
-        labels: (B,) - 5 类家族索引
+        features: (B, 128) normalized shared features or shape features
+        labels: (B,) family indices for the 5-way classification setting
         """
-        # 1. 确保特征是归一化的
+        # 1. Ensure features are normalized.
         features = F.normalize(features, p=2, dim=1)
-        # 2. 确保中心也是归一化的
+        # 2. Ensure prototypes are normalized as well.
         prototypes = F.normalize(self.prototypes, p=2, dim=1)
         
-        # 3. 计算样本与 5 个中心的相似度 (B, 5)
-        # 这本质上是将中心作为“权重”进行分类，但具备对比学习的温度控制
+        # 3. Compute sample-to-prototype similarities with temperature scaling.
         logits = torch.matmul(features, prototypes.T) / self.temperature
         
-        # 4. 计算 Cross Entropy
-        # 它的物理意义是：拉近样本与所属家族中心，推开与其他 4 个家族中心
+        # 4. Cross-entropy pulls samples toward their family prototype and
+        # pushes them away from the other family prototypes.
         loss = F.cross_entropy(logits, labels)
         
         return loss
@@ -358,7 +358,8 @@ class PrototypeSupConLoss(nn.Module):
     @torch.no_grad()
     def update_prototypes(self, features, labels, momentum=0.999):
         """
-        可选：在训练过程中动量更新中心，使其缓慢适应 3D 任务
+        Optional: update prototypes with momentum during training so they
+        adapt gradually to the 3D task.
         """
         for i in range(5):
             mask = (labels == i)
@@ -452,7 +453,7 @@ class SupConLoss(nn.Module):
 
         return loss
 
-# 在你的 losses.py 或训练脚本中
+# Auxiliary intermediate-supervision loss module.
 
 class InterLoss(nn.Module):
     def __init__(self, cfg):
@@ -470,24 +471,24 @@ class InterLoss(nn.Module):
     def forward(self, predictions, gt_data):
         """
         Args:
-            predictions: 模型输出 (pred_smal_params, pred_cam, pred_smal_params_list)
-            gt_data: dict 包含 GT 数据
+            predictions: model outputs (pred_smal_params, pred_cam, pred_smal_params_list)
+            gt_data: dict containing ground-truth data
                 - 'keypoints_2d': [B, N, 3] (x, y, visibility)
-                - 'keypoints_3d':  [B, N, 3] (x, y, z) 或 [B, N, 4] (x, y, z, confidence)
+                - 'keypoints_3d': [B, N, 3] (x, y, z) or [B, N, 4] (x, y, z, confidence)
         """
         pred_smal_params, pred_cam, pred_smal_params_list = predictions
         
         losses = {}
         total_loss = 0.0
         
-        # ========== 最终预测的监督 ==========
-        # (这里需要通过 SMAL 模型前向得到关键点)
-        # 假设你已经有了最终的 keypoints_2d 和 keypoints_3d
+        # ========== Supervision for final predictions ==========
+        # Final keypoint supervision can be added here after running the
+        # predicted parameters through the SMAL model.
         
-        # ========== 中间预测的监督 ==========
+        # ========== Supervision for intermediate predictions ==========
         if self.use_intermediate_supervision and pred_smal_params_list is not None:
             
-            # 2D keypoints 监督
+            # 2D keypoint supervision
             if 'keypoints_2d' in pred_smal_params_list and pred_smal_params_list['keypoints_2d'] is not None:
                 pred_kps_2d_all = pred_smal_params_list['keypoints_2d']
                 # [B*num_iters, N, 2]
@@ -495,12 +496,12 @@ class InterLoss(nn.Module):
                 gt_kps_2d = gt_data['keypoints_2d'][: , :, :2]  # [B, N, 2]
                 gt_vis_2d = gt_data['keypoints_2d'][:, :, 2]   # [B, N]
                 
-                # 复制 GT 到每次迭代
+                # Repeat the ground truth for each iteration.
                 num_iters = pred_kps_2d_all.shape[0] // gt_kps_2d.shape[0]
                 gt_kps_2d_repeated = gt_kps_2d.repeat(num_iters, 1, 1)  # [B*num_iters, N, 2]
                 gt_vis_2d_repeated = gt_vis_2d.repeat(num_iters, 1)     # [B*num_iters, N]
                 
-                # 计算 loss (只对可见的关键点)
+                # Compute the loss only over visible keypoints.
                 loss_2d = self.keypoint_2d_loss(pred_kps_2d_all, gt_kps_2d_repeated)
                 loss_2d = loss_2d.mean(dim=-1)  # [B*num_iters, N]
                 loss_2d = (loss_2d * gt_vis_2d_repeated).sum() / (gt_vis_2d_repeated.sum() + 1e-6)
@@ -508,7 +509,7 @@ class InterLoss(nn.Module):
                 losses['intermediate_keypoints_2d'] = loss_2d * self.intermediate_weight
                 total_loss += losses['intermediate_keypoints_2d']
             
-            # 3D keypoints 监督
+            # 3D keypoint supervision
             if 'keypoints_3d' in pred_smal_params_list and pred_smal_params_list['keypoints_3d'] is not None:
                 pred_kps_3d_all = pred_smal_params_list['keypoints_3d']
                 # [B*num_iters, N, 3]
@@ -517,14 +518,14 @@ class InterLoss(nn.Module):
                 if gt_data['keypoints_3d'].shape[-1] == 4:
                     gt_conf_3d = gt_data['keypoints_3d'][:, :, 3]  # [B, N]
                 else:
-                    gt_conf_3d = torch.ones_like(gt_kps_3d[:, :, 0])  # 全部有效
+                    gt_conf_3d = torch.ones_like(gt_kps_3d[:, :, 0])  # All keypoints are valid.
                 
-                # 复制 GT
+                # Repeat the ground truth for each iteration.
                 num_iters = pred_kps_3d_all.shape[0] // gt_kps_3d.shape[0]
                 gt_kps_3d_repeated = gt_kps_3d.repeat(num_iters, 1, 1)
                 gt_conf_3d_repeated = gt_conf_3d.repeat(num_iters, 1)
                 
-                # 计算 loss
+                # Compute the loss.
                 loss_3d = self.keypoint_3d_loss(pred_kps_3d_all, gt_kps_3d_repeated)
                 loss_3d = loss_3d.mean(dim=-1)  # [B*num_iters, N]
                 loss_3d = (loss_3d * gt_conf_3d_repeated).sum() / (gt_conf_3d_repeated.sum() + 1e-6)
@@ -532,7 +533,7 @@ class InterLoss(nn.Module):
                 losses['intermediate_keypoints_3d'] = loss_3d * self.intermediate_weight
                 total_loss += losses['intermediate_keypoints_3d']
         
-        # ...  其他 losses (pose, shape, 等) ...
+        # ... other losses (pose, shape, etc.) ...
         
         losses['total'] = total_loss
         return losses
