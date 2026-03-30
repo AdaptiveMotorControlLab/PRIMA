@@ -35,6 +35,7 @@ _C.GENERAL.DISTRIBUTED = False
 _C.GENERAL.LOCAL_RANK = 0
 _C.GENERAL.USE_SYNCBN = False
 _C.GENERAL.WORLD_SIZE = 1
+_C.GENERAL.PREFETCH_FACTOR = 2
 
 _C.TRAIN = CN(new_allowed=True)
 _C.TRAIN.NUM_EPOCHS = 100
@@ -107,6 +108,12 @@ def get_config(config_file: str, merge: bool = True, update_cachedir: bool = Fal
             if os.path.isabs(path):
                 return path
             return os.path.join(CACHE_DIR_AniMer, path)
+
+        cfg.defrost()
+        if 'SMAL' in cfg:
+            for key in ['MODEL_PATH', 'SHAPE_PRIOR_PATH', 'POSE_PRIOR_PATH', 'DATA_DIR']:
+                if key in cfg.SMAL and isinstance(cfg.SMAL[key], str):
+                    cfg.SMAL[key] = update_path(cfg.SMAL[key])
 
     cfg.freeze()
     return cfg
