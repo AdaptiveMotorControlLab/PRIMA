@@ -155,7 +155,7 @@ def render_and_save(renderer, out, batch, img_fn, animal_id, out_folder, suffix,
 
     cv2.imwrite(
         os.path.join(out_folder, f'{img_fn}_{animal_id}_{suffix}.png'),
-        cv2.cvtColor((255 * final_img[:, :, ::-1]).astype(np.uint8), cv2.COLOR_RGB2BGR),
+        cv2.cvtColor((255 * final_img).astype(np.uint8), cv2.COLOR_RGB2BGR),
     )
 
     if save_mesh:
@@ -245,7 +245,7 @@ def main():
             continue
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 
-        det_out = detector(img_rgb)
+        det_out = detector(img_bgr)
         det_instances = det_out['instances']
         valid_idx = [
             i for i, (c, s) in enumerate(zip(det_instances.pred_classes, det_instances.scores))
