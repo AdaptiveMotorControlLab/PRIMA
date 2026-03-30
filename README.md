@@ -79,11 +79,36 @@ needed for certain demos or advanced features:
 
 ### Checkpoints and data
 
-Place model checkpoints and config under `data/`, download stage-1 checkpoint from [here](https://drive.google.com/drive/folders/1pwIpYwP3aJ6W2M3-WhEvcFjW38-4j405?usp=drive_link), and stage-3 checkpoint from [here](https://drive.google.com/drive/folders/1DO6idTCORL5G6PLjikRaIjCXmo_-Ut31?usp=drive_link)
+Create a `data/` folder under the project root and download the required files into it:
 
-Download SMAL model from [here](https://drive.google.com/drive/folders/1O1tWYimVMA7hEbnwuPyiDWh90tUGoTPB?usp=drive_link), and place under `data/`
+```bash
+mkdir -p data/smal
+```
 
-Download the pretrained backbone from [here](https://drive.google.com/file/d/1jOJXJVPXnWX7W7vqYVt0joJZr4C8x-Yo/view?usp=drive_link)
+1. **SMAL model** -- download from [here](https://drive.google.com/drive/folders/1O1tWYimVMA7hEbnwuPyiDWh90tUGoTPB?usp=drive_link) and place the `.pkl` files under `data/smal/`
+2. **Pretrained backbone** -- download from [here](https://drive.google.com/file/d/1jOJXJVPXnWX7W7vqYVt0joJZr4C8x-Yo/view?usp=drive_link) and place at `data/amr_vitbb.pth`
+3. **Stage-1 checkpoint** -- download from [here](https://drive.google.com/drive/folders/1pwIpYwP3aJ6W2M3-WhEvcFjW38-4j405?usp=drive_link) and place under `data/PRIMAS1/`
+4. **Stage-3 checkpoint** -- download from [here](https://drive.google.com/drive/folders/1DO6idTCORL5G6PLjikRaIjCXmo_-Ut31?usp=drive_link) and place under `data/PRIMAS3/`
+
+After downloading, the expected layout is:
+
+```
+PRIMA/
+└── data/
+    ├── smal/
+    │   ├── my_smpl_00781_4_all.pkl
+    │   ├── my_smpl_data_00781_4_all.pkl
+    │   └── walking_toy_symmetric_pose_prior_with_cov_35parts.pkl
+    ├── amr_vitbb.pth
+    ├── PRIMAS1/
+    │   ├── .hydra/
+    │   │   └── config.yaml
+    │   └── checkpoints/
+    │       └── s1ckpt.ckpt
+    └── PRIMAS3/
+        └── checkpoints/
+            └── ...
+```
 
 ---
 
