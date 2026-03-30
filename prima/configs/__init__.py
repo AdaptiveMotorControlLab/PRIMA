@@ -109,11 +109,5 @@ def get_config(config_file: str, merge: bool = True, update_cachedir: bool = Fal
                 return path
             return os.path.join(CACHE_DIR_AniMer, path)
 
-        cfg.defrost()
-        if 'SMAL' in cfg:
-            for key in ['MODEL_PATH', 'SHAPE_PRIOR_PATH', 'POSE_PRIOR_PATH', 'DATA_DIR']:
-                if key in cfg.SMAL and isinstance(cfg.SMAL[key], str):
-                    cfg.SMAL[key] = update_path(cfg.SMAL[key])
-
     cfg.freeze()
     return cfg
