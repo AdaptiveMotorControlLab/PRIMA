@@ -183,10 +183,9 @@ Common values for `--dataset` are controlled by:
 
 This release builds on several open-source projects, including:
 - Detectron2
-- PyTorch Lightning
-- DeepLabCut SuperAnimal
+- OpenCLIP
 - AniMer
-- Transformer/backbone ecosystems (timm, Hugging Face Transformers, OpenCLIP)
+- DeepLabCut SuperAnimal
 
 ---
 
