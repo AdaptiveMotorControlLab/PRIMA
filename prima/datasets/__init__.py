@@ -1,5 +1,5 @@
 from typing import Dict, Optional
-from torch.utils.data import DistributedSampler, WeightedRandomSampler
+from torch.utils.data import WeightedRandomSampler
 import torch
 import pytorch_lightning as pl
 from yacs.config import CfgNode
