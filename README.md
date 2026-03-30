@@ -106,8 +106,10 @@ PRIMA/
     │   └── checkpoints/
     │       └── s1ckpt.ckpt
     └── PRIMAS3/
+        ├── .hydra/
+        │   └── config.yaml
         └── checkpoints/
-            └── ...
+            └── s3ckpt.ckpt
 ```
 
 ---
