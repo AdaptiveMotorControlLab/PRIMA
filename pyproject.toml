@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "prima-animal"
-version = "0.1.3"
+version = "0.1.5"
 description = "PRIMA: 3D animal pose and shape estimation"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -60,6 +60,11 @@ dependencies = [
   "gdown==5.2.0",
   "gradio==5.1.0",
   "pydantic==2.10.6",
+
+  # Web stack for Gradio demo
+  "fastapi==0.110.0",
+  "starlette==0.36.3",
+  "jinja2==3.1.4",
 
   # Training framework
   "pytorch-lightning==2.5.5",

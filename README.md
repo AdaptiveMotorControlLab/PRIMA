@@ -23,7 +23,7 @@ PRIMA creates a 3D quadruped mesh from a single 2D image. It leverages BioCLIP-b
 
 ## Installation
 
-### Install from PyPI (recommended)
+### Install from PyPI
 
 > Recommended: Python 3.10 and a CUDA-enabled PyTorch installation that you manage yourself.
 
@@ -35,11 +35,18 @@ conda activate prima
 pip install --index-url https://download.pytorch.org/whl/cu118 \
     "torch==2.2.1" "torchvision==0.17.1" "torchaudio==2.2.1"
 
+# Install chumpy
+python -m pip install --no-build-isolation \
+      "git+https://gitclone.com/github.com/mattloper/chumpy.git"
+
 # Install PRIMA core package (from PyPI / TestPyPI)
 pip install \
   --index-url https://test.pypi.org/simple/ \
   --extra-index-url https://pypi.org/simple \
   prima-animal==0.1.3
+
+# Install Pytorch3D
+python -m pip install --no-build-isolation "git+https://github.com/facebookresearch/pytorch3d.git"
 ```
 
 The `prima-animal` package installs most Python dependencies required by PRIMA
@@ -50,7 +57,7 @@ except heavy components such as PyTorch, Detectron2 and PyTorch3D.
 The following packages are **not** hard requirements of `prima-animal`, but are
 needed for certain demos or advanced features:
 
-- **Detectron2** – animal detection backbone used in `demo.py` and `demo_tta.py`:
+- **Detectron2** – animal detection backbone used in `demo.py`, `demo_tta.py`, and `demo_gradio.py`:
 
   ```bash
   # See Detectron2 docs and choose the wheel matching your torch/CUDA
@@ -58,29 +65,9 @@ needed for certain demos or advanced features:
       "git+https://github.com/facebookresearch/detectron2.git"
   ```
 
-- **Chumpy** 
 
-  ```bash
-  python -m pip install --no-build-isolation \
-      "git+https://gitclone.com/github.com/mattloper/chumpy.git"
-  ```
-
-- **PyTorch3D** – used for some 3D evaluation and geometry utilities (optional):
-
-  Please follow the official installation instructions and pick a wheel that
-  matches your PyTorch/CUDA setup:
-
-  - https://github.com/facebookresearch/pytorch3d/blob/main/INSTALL.md
-
-  Or install from source using no-build-isolation mode:
-
-  ```bash
-  python -m pip install --no-build-isolation \
-      "git+https://github.com/facebookresearch/pytorch3d.git"
-  ```
-
-- **DeepLabCut / SuperAnimal** – only required when using 2D keypoint TTA in
-  `demo_tta.py`:
+- **DeepLabCut** – only required when using 2D keypoint TTA in
+  `demo_tta.py` and `demo_gradio.py`:
 
   ```bash
   pip install "deeplabcut@git+https://github.com/DeepLabCut/DeepLabCut.git"
