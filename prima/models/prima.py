@@ -15,7 +15,7 @@ from .backbones import create_backbone
 from .heads import build_smal_head
 from ..utils import MeshRenderer
 from ..utils import renderer
-from prima.models.smal_warapper import SMAL
+from prima.models.smal_wrapper import SMAL
 from .discriminator import Discriminator
 
 from .bioclip_embedding import BioClipEmbedding
@@ -572,8 +572,6 @@ class PRIMA(pl.LightningModule):
         batch_size = batch['img'].shape[0]
         output = self.forward_step(batch, train=True)
         pred_smal_params = output['pred_smal_params']
-        if self.cfg.get('UPDATE_GT_SPIN', False):
-            self.update_batch_gt_spin(batch, output)
         loss = self.compute_loss(batch, output, train=True)
         if self.cfg.LOSS_WEIGHTS.get("ADVERSARIAL", 0) > 0:
             disc_out = self.discriminator(pred_smal_params['pose'].reshape(batch_size, -1),
