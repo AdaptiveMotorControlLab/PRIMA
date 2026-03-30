@@ -15,20 +15,20 @@ def load_prima(checkpoint_path):
         model_cfg.freeze()
     if (model_cfg.MODEL.BACKBONE.TYPE == 'dinov3') and ('BBOX_SHAPE' not in model_cfg.MODEL):
         model_cfg.defrost()
-        assert model_cfg.MODEL.IMAGE_SIZE == 256, f"MODEL.IMAGE_SIZE ({model_cfg.MODEL_IMAGE_SIZE}) should be 256 for dino backbone"
+        assert model_cfg.MODEL.IMAGE_SIZE == 256, f"MODEL.IMAGE_SIZE ({model_cfg.MODEL.IMAGE_SIZE}) should be 256 for dino backbone"
         model_cfg.MODEL.BBOX_SHAPE = [256, 256]
         model_cfg.freeze()
 
     if (model_cfg.MODEL.BACKBONE.TYPE == 'dinov2') and ('BBOX_SHAPE' not in model_cfg.MODEL):
         model_cfg.defrost()
-        assert model_cfg.MODEL.IMAGE_SIZE == 252, f"MODEL.IMAGE_SIZE ({model_cfg.MODEL_IMAGE_SIZE}) should be 252 for dino backbone"
+        assert model_cfg.MODEL.IMAGE_SIZE == 252, f"MODEL.IMAGE_SIZE ({model_cfg.MODEL.IMAGE_SIZE}) should be 252 for dino backbone"
         model_cfg.MODEL.BBOX_SHAPE = [252, 252]
         model_cfg.freeze()
         
  
     if (model_cfg.MODEL.BACKBONE.TYPE == 'concat') and ('BBOX_SHAPE' not in model_cfg.MODEL):
         model_cfg.defrost()
-        assert model_cfg.MODEL.IMAGE_SIZE == 256, f"MODEL.IMAGE_SIZE ({model_cfg.MODEL_IMAGE_SIZE}) take 256 for concat backbone (take bigger one,  project later)"
+        assert model_cfg.MODEL.IMAGE_SIZE == 256, f"MODEL.IMAGE_SIZE ({model_cfg.MODEL.IMAGE_SIZE}) take 256 for concat backbone (take bigger one, project later)"
         model_cfg.MODEL.BBOX_SHAPE = [256, 256]
         model_cfg.freeze()
 
