@@ -292,20 +292,20 @@ class NewBioGuidedSMALPoseDecoder(nn.Module):
         """
         B = x.shape[0]
 
-        # ---- 数据预处理 ----
-        # 处理 4D 输入 (B, C, H, W)
+        # ---- Data preprocessing ----
+        # Handle 4D input tensors of shape (B, C, H, W).
         if len(x.shape) == 4:
             x = einops.rearrange(x, 'b c h w -> b (h w) c')
 
-        bio_token = x[:, -1, :]  # [B, C] - BioCLIP token 是最后一个 token
-        image_features = x[:, :-1, :]  # [B, H*W, C] - 剩余的图像特征
+        bio_token = x[:, -1, :]  # [B, C] - the BioCLIP token is the final token
+        image_features = x[:, :-1, :]  # [B, H*W, C] - remaining image features
 
         # ---- Coarse bio shape ----
         init_betas = self.bio_to_betas_init(bio_token)  # [B,41]
         shape_feat = F.normalize(self.shape_projector(init_betas), dim=1)
 
-        # ---- Image features 投影 ----
-        # 只对图像特征进行投影，不包括 bio token
+        # ---- Image feature projection ----
+        # Project only image features, excluding the bio token.
         image_features = self.image_proj(image_features)  # [B,HW,D]
 
         # Your backbone: vit crop 256x192 with patch16 => Hp=12, Wp=16
@@ -526,21 +526,22 @@ class NewBioGuidedSMALPoseDecoder(nn.Module):
 
 class PoseTransformerDecoderLayer(nn.Module):
     """
-    单层 Transformer Decoder for Pose Token Aggregation
-    包含:  Self-Attention (tokens 交互) + Cross-Attention (tokens ← image) + FFN
+    Single-layer transformer decoder for pose-token aggregation.
+    Includes self-attention over tokens, cross-attention from tokens to
+    image features, and a feed-forward network.
     """
     
     def __init__(self, d_model=1024, nhead=8, dim_feedforward=4096, dropout=0.1):
         super().__init__()
         
-        # Self-Attention:  tokens 之间交互
+        # Self-attention over tokens
         self.self_attn = nn.MultiheadAttention(
             d_model, nhead, dropout=dropout, batch_first=True
         )
         self.norm1 = nn.LayerNorm(d_model)
         self.dropout1 = nn.Dropout(dropout)
         
-        # Cross-Attention: tokens 从图像聚合信息
+        # Cross-attention from image features into tokens
         self.cross_attn = nn.MultiheadAttention(
             d_model, nhead, dropout=dropout, batch_first=True
         )
@@ -560,19 +561,19 @@ class PoseTransformerDecoderLayer(nn.Module):
     def forward(self, tokens, image_features):
         """
         Args:
-            tokens:  [B, N_tokens, C] - 所有 tokens (pose + keypoints)
-            image_features:  [B, N_pixels, C] - 图像特征
+            tokens: [B, N_tokens, C] containing pose and keypoint tokens
+            image_features: [B, N_pixels, C] image features
         
         Returns: 
-            tokens:  [B, N_tokens, C] - 更新后的 tokens
+            tokens: [B, N_tokens, C] updated tokens
         """
         
-        # Self-Attention:  pose token 从 keypoint tokens 聚合信息
+        # Self-attention lets tokens exchange information.
         attn_output, _ = self.self_attn(tokens, tokens, tokens)
         tokens = tokens + self.dropout1(attn_output)
         tokens = self.norm1(tokens)
         
-        # Cross-Attention: tokens 从图像特征聚合视觉信息
+        # Cross-attention injects visual information from image features.
         attn_output, _ = self.cross_attn(
             query=tokens,
             key=image_features,
@@ -591,7 +592,7 @@ class PoseTransformerDecoderLayer(nn.Module):
 
 class PositionalEncoding2D(nn.Module):
     """
-    2D 正弦位置编码（用于图像特征）
+    2D sinusoidal positional encoding for image features.
     """
     
     def __init__(self, embed_dim=1024, temperature=10000):
@@ -602,24 +603,24 @@ class PositionalEncoding2D(nn.Module):
     def forward(self, H, W):
         """
         Args:
-            H, W: 特征图的高度和宽度
+            H, W: height and width of the feature map
         
         Returns:
             pos_encoding: [H*W, embed_dim]
         """
-        # 生成网格坐标
+        # Build grid coordinates.
         y_embed = torch.arange(H, dtype=torch.float32).unsqueeze(1).repeat(1, W)
         x_embed = torch.arange(W, dtype=torch.float32).unsqueeze(0).repeat(H, 1)
         
-        # 归一化到 [0, 1]
+        # Normalize to [0, 1].
         y_embed = y_embed / H
         x_embed = x_embed / W
         
-        # 生成频率
+        # Build frequencies.
         dim_t = torch.arange(self.embed_dim // 2, dtype=torch.float32)
         dim_t = self.temperature ** (2 * dim_t / self.embed_dim)
         
-        # Sin/Cos 编码
+        # Apply sine/cosine encoding.
         pos_x = x_embed[: , : , None] / dim_t
         pos_y = y_embed[:, :, None] / dim_t
         
@@ -633,6 +634,5 @@ class PositionalEncoding2D(nn.Module):
         pos = torch.cat([pos_y, pos_x], dim=2).flatten(0, 1)  # [H*W, embed_dim]
         
         return pos
-
 
 
