@@ -137,8 +137,9 @@ if __name__ == "__main__":
     
     gc.collect()
     
-    torch.cuda.empty_cache()
-    for i in range(torch.cuda.device_count()):
-        print(f"GPU {i}: {torch.cuda.memory_allocated()/1024**2:.2f} MiB allocated, "
-            f"{torch.cuda.memory_reserved()/1024**2:.2f} MiB reserved")
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        for i in range(torch.cuda.device_count()):
+            print(f"GPU {i}: {torch.cuda.memory_allocated(i)/1024**2:.2f} MiB allocated, "
+                f"{torch.cuda.memory_reserved(i)/1024**2:.2f} MiB reserved")
     main()
