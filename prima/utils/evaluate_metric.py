@@ -186,7 +186,8 @@ class Evaluator:
         smal_params = batch['smal_params']
         smal_params['global_orient'] = axis_angle_to_matrix(smal_params['global_orient'].reshape(batch_size, -1)).unsqueeze(1)
         smal_params['pose'] = axis_angle_to_matrix(smal_params['pose'].reshape(batch_size, -1, 3))
-        smal_params = {k: v.cuda() for k, v in smal_params.items()}
+        device = next(self.smal_model.parameters()).device
+        smal_params = {k: v.to(device) for k, v in smal_params.items()}
         with torch.no_grad():
             smal_output = self.smal_model(**smal_params)
         vertices = smal_output.vertices
