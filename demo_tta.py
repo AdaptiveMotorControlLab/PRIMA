@@ -1,18 +1,22 @@
 """
-please help me finish this script:
-1. given a image input, we first run detectron2 to detect animals in the image, and then run prima on each detected animal to get the 3D pose and shape estimation. 
-2. also run deeplabcut super animal model to get the 2D keypoint estimation for each detected animal.
-3. map the deeplabcut 2D keypoints(39) to 2D keypoints(26) used in prima 
-4. with the keypoints, run tta with lr and num_iters specified by user to further optimize the 3D pose and shape estimation.
-5. render the before tta results (png) and mesh (obj) and after tta results (png) and mesh (obj) to disk.
-6. also save the 26 keypoints used in prima to visualize to disk (png)
+demo_tta.py: PRIMA inference with DeepLabCut SuperAnimal TTA
 
-code that can be used for reference: 
-for test time adaptation: /home/xiaohang/Xiaohang_workspace/vggt_animal/AMR_cluster/eval_with_tta.py
-for deeplabcut: https://github.com/AdaptiveMotorControlLab/FMPose3D/blob/main/animals/demo/vis_animals.py
-keypoint mapping from deeplabcut super keypotints to animal3d keypoints can be found in /home/xiaohang/Xiaohang_workspace/vggt_animal/AniMer/process_quadr.py
-keypoint_mapping = {"quadruped80k":[10, 5, -1, 26, 29, 30, 35, 22, 24, 27, 31, 32, -1, -1, 25, 28, 33, 34, 15, 23, 11, 6, 4, 3, 0, -1]}
+Pipeline:
+1. Run Detectron2 to detect animals in the input image.
+2. Run PRIMA on each detected animal to obtain 3D pose/shape estimation.
+3. Run DeepLabCut SuperAnimal to obtain 2D keypoint estimation.
+4. Map the 39 SuperAnimal keypoints to the 26 PRIMA keypoints.
+5. Run test-time adaptation (TTA) with user-specified lr and num_iters
+   to further optimize the 3D pose and shape estimation.
+6. Render and save before/after TTA results (PNG + OBJ) and the
+   26-keypoint visualization (PNG).
 
+Reference code:
+- Test-time adaptation: prima/../eval_with_tta.py
+- DeepLabCut: https://github.com/AdaptiveMotorControlLab/FMPose3D/blob/main/animals/demo/vis_animals.py
+- Keypoint mapping (SuperAnimal 39 → PRIMA 26):
+    keypoint_mapping = {"quadruped80k":[10, 5, -1, 26, 29, 30, 35, 22, 24, 27, 31, 32, -1, -1,
+                                     25, 28, 33, 34, 15, 23, 11, 6, 4, 3, 0, -1]}
 """
 
 
