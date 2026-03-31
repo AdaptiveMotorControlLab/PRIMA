@@ -209,10 +209,10 @@ Common values for `--dataset` are controlled by:
 ## Acknowledgements
 
 This release builds on several open-source projects, including:
-- Detectron2
-- OpenCLIP
-- AniMer
-- DeepLabCut SuperAnimal
+- [Detectron2](https://github.com/facebookresearch/detectron2)
+- [BioCLIP](https://github.com/Imageomics/BioCLIP)
+- [AniMer](https://github.com/luoxue-star/AniMer)
+- [DeepLabCut](https://github.com/DeepLabCut/DeepLabCut)
 
 ---
 
