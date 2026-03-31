@@ -133,7 +133,7 @@ Optional:
 
 ### Demo (with tta)
 
-`demo_tta.py` pipeline, specify learning rate and numbers of iteration:
+`demo_tta.py` pipeline: specify learning rate and number of iterations:
 
 Example:
 
