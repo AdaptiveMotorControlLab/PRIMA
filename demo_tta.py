@@ -70,7 +70,7 @@ def map_superanimal_to_prima(bodyparts_xyc: np.ndarray) -> np.ndarray:
 
 
 def save_keypoint_vis(patch_rgb: np.ndarray, kpts_xyc: np.ndarray, save_path: str) -> None:
-    vis = (patch_rgb * 255).astype(np.uint8).copy()
+    vis = cv2.cvtColor((patch_rgb * 255).astype(np.uint8), cv2.COLOR_RGB2BGR).copy()
     num_kpts = len(kpts_xyc)
 
     for i, (x, y, c) in enumerate(kpts_xyc):
@@ -243,8 +243,6 @@ def main():
         if img_bgr is None:
             print(f"[WARN] Cannot read image: {img_path}")
             continue
-        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-
         det_out = detector(img_bgr)
         det_instances = det_out['instances']
         valid_idx = [
@@ -257,7 +255,7 @@ def main():
             print(f"[INFO] No animal detected in {img_path}")
             continue
 
-        dataset = ViTDetDataset(model_cfg, img_rgb, boxes)
+        dataset = ViTDetDataset(model_cfg, img_bgr, boxes)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
 
         for batch in tqdm(dataloader, desc=f"{img_path.name}"):
