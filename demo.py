@@ -66,8 +66,6 @@ def main():
         if img_bgr is None:
             print(f"[WARN] Cannot read image: {img_path}")
             continue
-        img_cv2 = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-
         # Detect animals in image
         det_out = detector(img_bgr)
 
@@ -76,7 +74,7 @@ def main():
         boxes = det_instances.pred_boxes.tensor[valid_idx].cpu().numpy()
 
         # Run AniMer on detected animals
-        dataset = ViTDetDataset(model_cfg, img_cv2, boxes)
+        dataset = ViTDetDataset(model_cfg, img_bgr, boxes)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
         for batch in tqdm(dataloader):
             batch = recursive_to(batch, device)
