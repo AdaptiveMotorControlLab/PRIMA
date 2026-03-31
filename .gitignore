@@ -171,3 +171,4 @@ data/backbone.pth
 logs/
 *.pth
 *.pkl
+datasets/
