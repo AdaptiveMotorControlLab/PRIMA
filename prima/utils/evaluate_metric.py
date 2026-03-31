@@ -186,7 +186,17 @@ class Evaluator:
         smal_params = batch['smal_params']
         smal_params['global_orient'] = axis_angle_to_matrix(smal_params['global_orient'].reshape(batch_size, -1)).unsqueeze(1)
         smal_params['pose'] = axis_angle_to_matrix(smal_params['pose'].reshape(batch_size, -1, 3))
-        device = next(self.smal_model.parameters()).device
+        # The SMAL model only registers buffers (e.g. shapedirs) and has no trainable parameters,
+        # so self.smal_model.parameters() can be empty and calling next on it would raise StopIteration.
+        # Here we first try to get the device from parameters; if there are no parameters, fall back to buffers;
+        # if there are no buffers either, fall back to the device of the input batch.
+        try:
+            device = next(self.smal_model.parameters()).device
+        except StopIteration:
+            try:
+                device = next(self.smal_model.buffers()).device
+            except StopIteration:
+                device = batch['img'].device
         smal_params = {k: v.to(device) for k, v in smal_params.items()}
         with torch.no_grad():
             smal_output = self.smal_model(**smal_params)
