@@ -197,7 +197,7 @@ Training outputs are written to `logs/train/runs/<exp_name>/`.
 ```bash
 python eval.py \
   --config data/PRIMAS1/.hydra/config.yaml \
-  --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt \
+  --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt
 ```
 
 Common values for `--dataset` are controlled by:
