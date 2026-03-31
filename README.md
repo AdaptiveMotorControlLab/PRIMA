@@ -170,7 +170,7 @@ you can upload images and visualize PRIMA predictions and adaptation results.
 
 ### Dataset Setup
 
-Download dataset from [Animal3D](https://xujiacong.github.io/Animal3D/), [CtrlAni3D](https://github.com/luoxue-star/AniMer?tab=readme-ov-file#training), and [Quadruped80K](https://zenodo.org/records/14016777). Put them under `datasets/`
+Download dataset from [Animal3D](https://xujiacong.github.io/Animal3D/), [CtrlAni3D](https://github.com/luoxue-star/AniMer?tab=readme-ov-file#training), [Quadruped80K](https://zenodo.org/records/14016777), and [Animal Kingdom](https://drive.google.com/file/d/1dk2a0qB0fbVZ4X6eAgP6VJVXj0rxVfsJ/view?usp=drive_link). Put them under `datasets/`
 
 ### Training 
 
