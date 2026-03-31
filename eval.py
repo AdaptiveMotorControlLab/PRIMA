@@ -86,7 +86,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, help="Path to config file", required=True)
     parser.add_argument("--checkpoint", type=str, help="Path to checkpoint file", required=True)
-    parser.add_argument("--default_eval_config", type=str, default="prima/configs_hydra/experiment/default_val.yaml")
+    parser.add_argument("--default_eval_config", type=str, default="./configs_hydra/experiment/default_val.yaml")
     parser.add_argument("--dataset", type=str, default="ALL")
     parser.add_argument("--device", type=str, default="cuda", help="Device to use for evaluation")
     args = parser.parse_args()
