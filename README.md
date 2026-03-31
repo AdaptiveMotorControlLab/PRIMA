@@ -57,7 +57,7 @@ except heavy components such as PyTorch, Detectron2 and PyTorch3D.
 The following packages are **not** hard requirements of `prima-animal`, but are
 needed for certain demos or advanced features:
 
-- **Detectron2** – animal detection backbone used in `demo.py`, `demo_tta.py`, and `demo_gradio.py`:
+- **Detectron2** – animal detection backbone used in `demo.py`, `demo_tta.py`, and `app.py`:
 
   ```bash
   # See Detectron2 docs and choose the wheel matching your torch/CUDA
@@ -67,7 +67,7 @@ needed for certain demos or advanced features:
 
 
 - **DeepLabCut** – only required when using 2D keypoint TTA in
-  `demo_tta.py` and `demo_gradio.py`:
+  `demo_tta.py` and `app.py`:
 
   ```bash
   pip install "deeplabcut@git+https://github.com/DeepLabCut/DeepLabCut.git"
@@ -156,7 +156,7 @@ We also provide a simple Gradio-based web demo for interactive testing in the
 browser:
 
 ```bash
-python demo_gradio.py \
+python app.py \
   --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt
 ```
 
