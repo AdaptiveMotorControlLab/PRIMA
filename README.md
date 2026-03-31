@@ -161,7 +161,7 @@ python app.py \
 ```
 
 This will start a local Gradio app (by default on http://127.0.0.1:7860), where
-you can upload images and visualize PRIMA predictions.
+you can upload images and visualize PRIMA predictions and adaptation results.
 
 ---
 
