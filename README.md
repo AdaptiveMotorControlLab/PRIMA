@@ -170,7 +170,7 @@ you can upload images and visualize PRIMA predictions and adaptation results.
 
 ### Dataset Setup
 
-Download dataset from [Animal3D](https://xujiacong.github.io/Animal3D/), [CtrlAni3D](https://github.com/luoxue-star/AniMer?tab=readme-ov-file#training), and [Quadruped80K](https://zenodo.org/records/14016777). Then update the dataset paths in [training config](prima/configs_hydra/experiment/primaStage1.yaml) and [validation config](prima/configs_hydra/experiment/default_val.yaml) to point to your training and evaluation data.
+Download dataset from [Animal3D](https://xujiacong.github.io/Animal3D/), [CtrlAni3D](https://github.com/luoxue-star/AniMer?tab=readme-ov-file#training), and [Quadruped80K](https://zenodo.org/records/14016777). Put them under `datasets/`
 
 ### Training 
 
