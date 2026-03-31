@@ -1,15 +1,18 @@
 '''
 this scripts if to convert DeepLabCut labeled data format (20 keypoints) to COCO format (26 keypoints ), also image should be extracted from the raw video to save as frames.
 
-for camera x 
-dlc keypoint data: /home/xiaohang/Xiaohang_workspace/vggt_animal/AniMer/datasets/lily2019/run/fte_pw/camx_fte.csv,
+Usage:
+    python dlc2coco.py --dataset_dir /path/to/dataset --output_dir /path/to/output
+
+for camera x
+dlc keypoint data: <dataset_dir>/<behavior>/fte_pw/camx_fte.csv,
     where video frame index from the video and keypoint coordinates are stored
-raw video: /home/xiaohang/Xiaohang_workspace/vggt_animal/AniMer/datasets/lily2019/run/camx.mp4
+raw video: <dataset_dir>/<behavior>/camx.mp4
 
-for coco format, please refer to the format of this file: 
-    /home/xiaohang/Xiaohang_workspace/vggt_animal/AniMer/datasets/quadruped2d/test.json
+for coco format, please refer to:
+    ./datasets/quadruped2d/test.json
 
-also, the relationship of multiview should be saved. 
+also, the relationship of multiview should be saved.
 
 
 keypoint mapping from acinoset to animal3d :
@@ -18,6 +21,7 @@ keypoint_mapping = {"acinoset":[2, 1, -1, 13, 10, 19, 16, 5, -1, -1, -1, -1, 11,
 
 '''
 
+import argparse
 import os
 import json
 import cv2
@@ -232,22 +236,45 @@ def process_camera(camera_id, base_dir, output_dir, behavior):
     
     return coco_data
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Convert DeepLabCut labeled data to COCO format"
+    )
+    parser.add_argument(
+        "--dataset_dir", type=str, default=".",
+        help="Root directory containing behavior subdirectories (run, flick, etc.)"
+    )
+    parser.add_argument(
+        "--output_dir", type=str, default=None,
+        help="Output directory for COCO format data (default: {dataset_dir}/coco_format)"
+    )
+    parser.add_argument(
+        "--behaviors", type=str, nargs="+", default=["run", "flick"],
+        help="Behavior names to process (default: run flick)"
+    )
+    parser.add_argument(
+        "--cameras", type=int, nargs="+", default=[1, 2, 3, 4, 5, 6],
+        help="Camera IDs to process (default: 1 2 3 4 5 6)"
+    )
+    return parser.parse_args()
+
+
 def main():
-    # Configuration
-    lily2019_dir = Path("/home/xiaohang/Xiaohang_workspace/vggt_animal/AniMer/datasets/lily2019")
-    output_dir = Path("/home/xiaohang/Xiaohang_workspace/vggt_animal/AniMer/datasets/lily2019/coco_format")
+    args = parse_args()
+
+    dataset_dir = Path(args.dataset_dir)
+    output_dir = Path(args.output_dir) if args.output_dir else dataset_dir / "coco_format"
     output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Process both behaviors: run and flick
-    behaviors = ["run", "flick"]
-    camera_ids = [1, 2, 3, 4, 5, 6]
+
+    behaviors = args.behaviors
+    camera_ids = args.cameras
     
     all_data = []
     behavior_data = {}
     camera_data = {}
     
     for behavior in behaviors:
-        behavior_dir = lily2019_dir / behavior
+        behavior_dir = dataset_dir / behavior
         behavior_data[behavior] = []
         
         print(f"\n{'='*60}")
