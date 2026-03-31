@@ -21,11 +21,10 @@ from pytorch_lightning.plugins.environments import SLURMEnvironment
 # from pytorch_lightning.trainingtype import DDPPlugin
 from pytorch_lightning.callbacks import TQDMProgressBar
 from tqdm import tqdm
-from prima.configs import dataset_config
 from prima.datasets import DataModule
 from prima.models.prima import PRIMA
 from prima.utils.pylogger import get_pylogger
-from prima.utils.misc import task_wrapper, log_hyperparameters
+from prima.utils.misc import log_hyperparameters
 import signal
 
 signal.signal(signal.SIGUSR1, signal.SIG_DFL)
