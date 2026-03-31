@@ -118,7 +118,8 @@ def _collect_animal_results(
     """
 
     # Detect animals
-    det_out = DETECTOR(img_rgb)
+    img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
+    det_out = DETECTOR(img_bgr)
     det_instances = det_out["instances"]
 
     valid_idx = [
@@ -131,7 +132,7 @@ def _collect_animal_results(
 
     boxes = det_instances.pred_boxes.tensor[valid_idx].cpu().numpy()
 
-    dataset = ViTDetDataset(MODEL_CFG, img_rgb, boxes)
+    dataset = ViTDetDataset(MODEL_CFG, img_bgr, boxes)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
 
     before_imgs: List[np.ndarray] = []
