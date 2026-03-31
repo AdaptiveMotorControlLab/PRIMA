@@ -74,8 +74,9 @@ dependencies = [
 all = []
 
 [project.urls]
-Homepage = "https://github.com/AdaptiveMotorControlLab/Xiaohang_workspace"
-Source = "https://github.com/AdaptiveMotorControlLab/Xiaohang_workspace/tree/cluster_support_serverinfer/PRIMA"
+Homepage = "https://github.com/AdaptiveMotorControlLab/PRIMA"
+Source = "https://github.com/AdaptiveMotorControlLab/PRIMA"
+Issues = "https://github.com/AdaptiveMotorControlLab/PRIMA/issues"
 
 [tool.setuptools]
 include-package-data = true
