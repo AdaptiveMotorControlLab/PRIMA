@@ -1,16 +1,15 @@
 """
 Split acinoset multiview_mapping.json into train and test sets (7:3 ratio).
 
-# Original reference paths (adjust BASE_DIR below to match your setup):
-#   Input JSON:  <BASE_DIR>/acinoset/multiview_mapping.json
-#   Output dir:  <BASE_DIR>/acinoset/
-#
-# Example layout:
-#   datasets/acinoset/multiview_mapping.json
-#   datasets/acinoset/train.json
-#   datasets/acinoset/test.json
+Usage:
+    python split_acinoset.py \
+        --input_json /path/to/multiview_mapping.json \
+        --output_dir /path/to/output \
+        --train_ratio 0.7 \
+        --seed 42
 """
 
+import argparse
 import json
 import random
 from pathlib import Path
@@ -27,9 +26,11 @@ def split_multiview_data(input_json, output_dir, train_ratio=0.7, seed=42):
     """
     Split multiview mapping data into train and test sets.
 
+
     Args:
         input_json: Path to multiview_mapping.json
         output_dir: Directory to save train.json and test.json
+        train_ratio: Ratio of training data (default 0.7 for 70%%)
         train_ratio: Ratio of training data (default 0.7 for 70%%)
         seed: Random seed for reproducibility
     """
@@ -112,13 +113,32 @@ def split_multiview_data(input_json, output_dir, train_ratio=0.7, seed=42):
 
 
 if __name__ == "__main__":
-    # Adjust BASE_DIR at the top of this file to match your setup.
-    input_json = BASE_DIR / "acinoset" / "multiview_mapping.json"
-    output_dir = BASE_DIR / "acinoset"
+    parser = argparse.ArgumentParser(
+        description="Split multiview_mapping.json into train/test sets (default 7:3)."
+    )
+    parser.add_argument(
+        "--input_json", type=str,
+        default="datasets/acinoset/multiview_mapping.json",
+        help="Path to multiview_mapping.json (default: datasets/acinoset/multiview_mapping.json)."
+    )
+    parser.add_argument(
+        "--output_dir", type=str,
+        default="datasets/acinoset",
+        help="Directory to save train.json and test.json (default: datasets/acinoset)."
+    )
+    parser.add_argument(
+        "--train_ratio", type=float, default=0.7,
+        help="Fraction of data for training (default: 0.7)."
+    )
+    parser.add_argument(
+        "--seed", type=int, default=42,
+        help="Random seed for reproducibility (default: 42)."
+    )
+    args = parser.parse_args()
 
     split_multiview_data(
-        input_json=input_json,
-        output_dir=output_dir,
-        train_ratio=0.7,
-        seed=42,
+        input_json=args.input_json,
+        output_dir=args.output_dir,
+        train_ratio=args.train_ratio,
+        seed=args.seed,
     )
