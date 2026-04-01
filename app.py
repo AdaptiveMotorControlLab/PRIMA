@@ -350,15 +350,6 @@ demo = gr.Interface(
             True,  # save_mesh
         ],
         [
-            "demo_data/antelope_10123_53531.jpg",
-            1e-6,
-            30,
-            0.7,
-            0.1,
-            False,
-            True,
-        ],
-        [
             "demo_data/n02412080_12159.png",
             1e-6,
             30,
