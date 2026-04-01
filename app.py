@@ -350,7 +350,7 @@ demo = gr.Interface(
             True,  # save_mesh
         ],
         [
-            "demo_data/n02101388_1188.png",
+            "demo_data/antelope_10123_53531.jpg",
             1e-6,
             30,
             0.7,
@@ -368,7 +368,7 @@ demo = gr.Interface(
             True,
         ],
         [
-            "demo_data/000000101684_zebra.png",
+            "demo_data/000000315905_zebra.jpg",
             1e-6,
             30,
             0.7,
@@ -378,7 +378,7 @@ demo = gr.Interface(
         ],
         # big / hati examples without TTA (iterations = 0)
         [
-            "demo_data/big.jpg",
+            "demo_data/beagle.jpg",
             1e-6,
             0,     # no TTA
             0.7,
@@ -387,7 +387,7 @@ demo = gr.Interface(
             True,
         ],
         [
-            "demo_data/hati.jpg",
+            "demo_data/shepherd_hati.jpg",
             1e-6,
             0,     # no TTA
             0.7,
