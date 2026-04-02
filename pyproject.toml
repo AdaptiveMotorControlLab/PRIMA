@@ -9,7 +9,6 @@ description = "PRIMA: 3D animal pose and shape estimation"
 readme = "README.md"
 requires-python = ">=3.9"
 
-# TODO: Replace with your own information
 authors = [
   { name = "Xiaohang Yu", email = "xiaohang.yu@epfl.ch" },
   { name = "Ti Wang", email = "ti.wang@epfl.ch" },
@@ -84,9 +83,3 @@ include-package-data = true
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["prima*"]
-
-[tool.setuptools.package-data]
-# Package Hydra config files and other non-Python assets
-"prima" = [
-  "configs_hydra/**/*.yaml",
-]
