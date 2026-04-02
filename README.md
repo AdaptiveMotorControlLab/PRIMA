@@ -200,8 +200,7 @@ python eval.py \
   --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt
 ```
 
-Common values for `--dataset` are controlled by:
-- `prima/configs_hydra/experiment/default_val.yaml`
+Common values for `--dataset` are controlled by `prima/configs_hydra/experiment/default_val.yaml`
 
 ---
 
