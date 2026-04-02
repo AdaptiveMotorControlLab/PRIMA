@@ -1,9 +1,5 @@
-import os
 from typing import Dict
 from yacs.config import CfgNode as CN
-
-CACHE_DIR_AniMer = "./_DATA"
-
 
 def to_lower(x: Dict) -> Dict:
     """
@@ -75,7 +71,7 @@ def default_config() -> CN:
     return _C.clone()
 
 
-def get_config(config_file: str, merge: bool = True, update_cachedir: bool = False) -> CN:
+def get_config(config_file: str, merge: bool = True) -> CN:
     """
     Read a config file and optionally merge it with the default config file.
     Args:
@@ -89,12 +85,6 @@ def get_config(config_file: str, merge: bool = True, update_cachedir: bool = Fal
     else:
         cfg = CN(new_allowed=True)
     cfg.merge_from_file(config_file)
-
-    if update_cachedir:
-        def update_path(path: str) -> str:
-            if os.path.isabs(path):
-                return path
-            return os.path.join(CACHE_DIR_AniMer, path)
 
     cfg.freeze()
     return cfg
