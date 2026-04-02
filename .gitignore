@@ -164,6 +164,7 @@ cython_debug/
 .vscode/
 
 # Directory
+.gradio/
 demo_out/
 demo_out*/
 data/PRIMA*/
