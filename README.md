@@ -31,6 +31,9 @@ PRIMA creates a 3D quadruped mesh from a single 2D image. It leverages BioCLIP-b
 conda create -n prima python=3.10 -y
 conda activate prima
 
+git clone https://github.com/AdaptiveMotorControlLab/PRIMA.git
+cd PRIMA
+
 # Install PyTorch matching your CUDA (example: CUDA 11.8)
 pip install --index-url https://download.pytorch.org/whl/cu118 \
     "torch==2.2.1" "torchvision==0.17.1" "torchaudio==2.2.1"
@@ -45,7 +48,7 @@ pip install \
   --extra-index-url https://pypi.org/simple \
   prima-animal==0.1.6
 
-# Install Pytorch3D
+# Install PyTorch3D
 python -m pip install --no-build-isolation "git+https://github.com/facebookresearch/pytorch3d.git"
 ```
 
@@ -114,7 +117,7 @@ PRIMA/
 
 ---
 
-### Demo (without tta)
+### Demo (without TTA)
 
 Run animal detection + PRIMA 3D pose/shape inference:
 
@@ -131,7 +134,7 @@ Optional:
 
 ---
 
-### Demo (with tta)
+### Demo (with TTA)
 
 `demo_tta.py` pipeline: specify learning rate and number of iterations:
 
@@ -157,7 +160,8 @@ browser:
 
 ```bash
 python app.py \
-  --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt
+  --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt \
+  --out_folder demo_out_tta_gradio/
 ```
 
 This will start a local Gradio app (by default on http://127.0.0.1:7860), where
@@ -170,7 +174,7 @@ you can upload images and visualize PRIMA predictions and adaptation results.
 
 ### Dataset Setup
 
-Download datasets from [Animal3D](https://xujiacong.github.io/Animal3D/), [CtrlAni3D](https://github.com/luoxue-star/AniMer?tab=readme-ov-file#training), Quadruped2D, and [Animal Kingdom](https://drive.google.com/file/d/1dk2a0qB0fbVZ4X6eAgP6VJVXj0rxVfsJ/view?usp=drive_link). Note, for Quadruped2D, download the images from [SuperAnimal-Quadruped80K](https://zenodo.org/records/14016777) and download our processed annotation from [here](https://drive.google.com/drive/folders/1eBNboxVwl_eGPoC93zxf-U3hmE6e2f-f?usp=sharing). Put all the datasets under `datasets/`.
+Download datasets from [Animal3D](https://xujiacong.github.io/Animal3D/), [CtrlAni3D](https://github.com/luoxue-star/AniMer?tab=readme-ov-file#training), Quadruped2D, and [Animal Kingdom](https://drive.google.com/file/d/1dk2a0qB0fbVZ4X6eAgP6VJVXj0rxVfsJ/view?usp=drive_link). For Quadruped2D, download the images from [SuperAnimal-Quadruped80K](https://zenodo.org/records/14016777) and our processed annotations from [here](https://drive.google.com/drive/folders/1eBNboxVwl_eGPoC93zxf-U3hmE6e2f-f?usp=sharing). Put all datasets under `datasets/`.
 
 ### Training 
 
@@ -185,9 +189,9 @@ bash train.sh
 - Stage 2: `experiment=primaStage2`
 
 Main configs:
-- `prima/configs_hydra/train.yaml`
-- `prima/configs_hydra/experiment/primaStage1.yaml`
-- `prima/configs_hydra/experiment/primaStage2.yaml` -->
+- `configs_hydra/train.yaml`
+- `configs_hydra/experiment/primaStage1.yaml`
+- `configs_hydra/experiment/primaStage2.yaml` -->
 
 Training outputs are written to `logs/train/runs/<exp_name>/`.
 
@@ -200,7 +204,8 @@ python eval.py \
   --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt
 ```
 
-Common values for `--dataset` are controlled by `prima/configs_hydra/experiment/default_val.yaml`
+Common values for `--dataset` are controlled by:
+- `configs_hydra/experiment/default_val.yaml`
 
 ---
 
