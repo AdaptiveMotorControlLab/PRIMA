@@ -11,9 +11,7 @@ class AdaptiveLayerNorm1D(torch.nn.Module):
             raise ValueError(f"data_dim must be positive, but got {data_dim}")
         if norm_cond_dim <= 0:
             raise ValueError(f"norm_cond_dim must be positive, but got {norm_cond_dim}")
-        self.norm = torch.nn.LayerNorm(
-            data_dim
-        )  # TODO: Check if elementwise_affine=True is correct
+        self.norm = torch.nn.LayerNorm(data_dim)
         self.linear = torch.nn.Linear(norm_cond_dim, 2 * data_dim)
         torch.nn.init.zeros_(self.linear.weight)
         torch.nn.init.zeros_(self.linear.bias)
@@ -37,10 +35,8 @@ class SequentialCond(torch.nn.Sequential):
     def forward(self, input, *args, **kwargs):
         for module in self:
             if isinstance(module, (AdaptiveLayerNorm1D, SequentialCond, ResidualMLPBlock)):
-                # print(f'Passing on args to {module}', [a.shape for a in args])
                 input = module(input, *args, **kwargs)
             else:
-                # print(f'Skipping passing args to {module}', [a.shape for a in args])
                 input = module(input)
         return input
 
