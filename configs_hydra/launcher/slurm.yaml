@@ -15,8 +15,8 @@ hydra:
     cpus_per_task: 12
     gpus_per_node: ${trainer.devices}
     cpus_per_gpu: null
-    comment: laion
-    name: hamer
+    comment: prima
+    name: prima
     setup:
       - module load cuda openmpi libfabric-aws
       - export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
