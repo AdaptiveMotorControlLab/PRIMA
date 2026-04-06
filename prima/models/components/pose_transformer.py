@@ -11,7 +11,6 @@ from .t_cond_mlp import (
     FrequencyEmbedder,
     normalization_layer,
 )
-# from .vit import Attention, FeedForward
 
 
 def exists(val):
@@ -214,7 +213,7 @@ class DropTokenDropout(nn.Module):
         # x: (batch_size, seq_len, dim)
         if self.training and self.p > 0:
             zero_mask = torch.full_like(x[0, :, 0], self.p).bernoulli().bool()
-            # TODO: permutation idx for each batch using torch.argsort
+
             if zero_mask.any():
                 x = x[:, ~zero_mask, :]
         return x
