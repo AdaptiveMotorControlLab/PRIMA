@@ -73,7 +73,7 @@ def main():
         valid_idx = [i for i, (c, s) in enumerate(zip(det_instances.pred_classes, det_instances.scores)) if ((c in [15, 16, 17, 18, 19, 21, 22]) & (s > 0.7))]
         boxes = det_instances.pred_boxes.tensor[valid_idx].cpu().numpy()
 
-        # Run AniMer on detected animals
+        # Run PRIMA on detected animals
         dataset = ViTDetDataset(model_cfg, img_bgr, boxes)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
         for batch in tqdm(dataloader):
