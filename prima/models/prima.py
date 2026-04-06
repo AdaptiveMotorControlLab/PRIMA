@@ -45,8 +45,7 @@ class PRIMA(pl.LightningModule):
 
         self.cfg = cfg
         # Create backbone feature extractor
-        # if (cfg.MODEL.BACKBONE.get('PRETRAINED_WEIGHTS', None)) and (cfg.MODEL.BACKBONE.TYPE =='vith'): 
-        
+
         if cfg.MODEL.BACKBONE.TYPE =='vith':
             self.backbone = create_backbone(cfg) # create vit backbone anyway, for inference, no config loading, just load ckpt weights 
         
@@ -63,13 +62,12 @@ class PRIMA(pl.LightningModule):
         elif cfg.MODEL.BACKBONE.TYPE =='dinov3':
             log.info(f'Loading DINOv3 backbone weights from torch hub') 
             # load  feature extractor
-            # feature_extractor = AutoFeatureExtractor.from_pretrained("facebook/dinov3-vitl16-pretrain-lvd1689m") 
-            # load model, which is vit backbone 
+
             self.backbone = AutoModel.from_pretrained("facebook/dinov3-vitl16-pretrain-lvd1689m")
             for param in self.backbone.parameters():
                 param.requires_grad = True
             
-            # print(model) # this is exactly DINOv3ViTModel (embeddings + rope_embeddings + layer * 24 + norm )
+
             
         # freeze backbones (only dino or dino + aa)
         if cfg.MODEL.BACKBONE.get('FREEZE', False) and cfg.MODEL.BACKBONE.FREEZE in ['dinov2', 'dinov3']:
@@ -252,20 +250,17 @@ class PRIMA(pl.LightningModule):
             
             
         elif self.cfg.MODEL.BACKBONE.TYPE == 'dinov3': # dino backbone, return [1, 329, 1024] 18*18+5=329.  kernel size dinov2=14; dinov3=16
-            self.backbone.train(self.training) # if amr model is training, then dino backbone is training too
-            # print("*****************if it's training dino backbone?", self.backbone.training)
-            bb_output = self.backbone(x[:, :, :, :]) # dino use square ? yes # what the output of dino
-            # print(bb_output['last_hidden_state'].shape,bb_output['pooler_output'].shape)   # [16, 261, 1024]) torch.Size([16, 1024].  # 261 = 16*16 + 5
-            conditioning_feats, cls = bb_output["last_hidden_state"][:,5:,:],bb_output['pooler_output']  
-            # cls = cls.squeeze(1) # into [B,1024] # no need to squeeze, already [B, 1024]
+            self.backbone.train(self.training)
+            bb_output = self.backbone(x[:, :, :, :])
+            conditioning_feats, cls = bb_output["last_hidden_state"][:,5:,:],bb_output['pooler_output']
             
-        # print("**********check conditioning_feats shape:", conditioning_feats.shape)
+
         
   
         # add bioclip embedding if enabled
         if self.bioclip_embedding is not None:
             species_feature = self.bioclip_embedding(batch['img'])  # [B, embed_dim]
-            # print("**********check bioclip species feature shape:", species_feature.shape)
+
             # concatenate species feature to conditioning_feats along token dimension
             if len(conditioning_feats.shape) == 3:
                 # Token-wise concatenation: add species_feature as a single token
