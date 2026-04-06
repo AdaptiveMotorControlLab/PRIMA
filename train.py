@@ -18,7 +18,6 @@ from omegaconf import DictConfig
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.plugins.environments import SLURMEnvironment
-# from pytorch_lightning.trainingtype import DDPPlugin
 from pytorch_lightning.callbacks import TQDMProgressBar
 from tqdm import tqdm
 from prima.datasets import DataModule
