@@ -40,7 +40,7 @@ pip install --index-url https://download.pytorch.org/whl/cu118 \
 
 # Install chumpy
 python -m pip install --no-build-isolation \
-      "git+https://gitclone.com/github.com/mattloper/chumpy.git"
+      "git+https://github.com/mattloper/chumpy.git"
 
 # Install PRIMA core package (from PyPI / TestPyPI)
 pip install \
