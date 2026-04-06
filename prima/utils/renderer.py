@@ -382,7 +382,7 @@ class Renderer:
         return color
 
     def add_lighting(self, scene, cam_node, color=np.ones(3), intensity=1.0):
-        # from phalp.visualize.py_renderer import get_light_poses
+
         light_poses = get_light_poses()
         light_poses.append(np.eye(4))
         cam_pose = scene.get_pose(cam_node)
@@ -398,7 +398,7 @@ class Renderer:
             scene.add_node(node)
 
     def add_point_lighting(self, scene, cam_node, color=np.ones(3), intensity=1.0):
-        # from phalp.visualize.py_renderer import get_light_poses
+
         light_poses = get_light_poses(dist=0.5)
         light_poses.append(np.eye(4))
         cam_pose = scene.get_pose(cam_node)
