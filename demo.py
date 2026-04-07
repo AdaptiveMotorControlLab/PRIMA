@@ -24,8 +24,6 @@ GREEN = (0.65, 0.86, 0.74)
 
 
 def main():
-    import time
-    start = time.time()
     parser = argparse.ArgumentParser(description='prima demo code')
     parser.add_argument('--checkpoint', type=str,
                         help='Path to pretrained model checkpoint')
@@ -36,7 +34,7 @@ def main():
     parser.add_argument('--save_mesh', dest='save_mesh', action='store_true', default=False,
                         help='If set, save meshes to disk also')
     parser.add_argument('--batch_size', type=int, default=1, help='Batch size for inference/fitting')
-    parser.add_argument('--file_type', nargs='+', default=['*.jpg', '*.png', '*.JPEG'],
+    parser.add_argument('--file_type', nargs='+', default=['*.jpg', '*.png', '*.jpeg', '*.JPEG'],
                         help='List of file extensions to consider')
 
     args = parser.parse_args()
