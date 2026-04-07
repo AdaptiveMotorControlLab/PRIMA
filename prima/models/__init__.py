@@ -26,11 +26,6 @@ def load_prima(checkpoint_path):
         model_cfg.freeze()
         
  
-    if (model_cfg.MODEL.BACKBONE.TYPE == 'concat') and ('BBOX_SHAPE' not in model_cfg.MODEL):
-        model_cfg.defrost()
-        assert model_cfg.MODEL.IMAGE_SIZE == 256, f"MODEL.IMAGE_SIZE ({model_cfg.MODEL.IMAGE_SIZE}) take 256 for concat backbone (take bigger one, project later)"
-        model_cfg.MODEL.BBOX_SHAPE = [256, 256]
-        model_cfg.freeze()
 
     # Update config to be compatible with demo
     if ('PRETRAINED_WEIGHTS' in model_cfg.MODEL.BACKBONE):
