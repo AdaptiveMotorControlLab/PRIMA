@@ -65,7 +65,7 @@ class Discriminator(nn.Module):
         Forward pass of the discriminator.
         Args:
             poses (torch.Tensor): Tensor of shape (B, 23, 3, 3) containing a batch of poses (excluding the global orientation).
-            betas (torch.Tensor): Tensor of shape (B, 41) containign a batch of SMAL beta coefficients.
+            betas (torch.Tensor): Tensor of shape (B, 41) containing a batch of SMAL beta coefficients.
         Returns:
             torch.Tensor: Discriminator output with shape (B, 25)
         """
