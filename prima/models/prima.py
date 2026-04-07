@@ -165,7 +165,7 @@ class PRIMA(pl.LightningModule):
 
     def configure_optimizers(self):
         """
-        Setup model and distriminator Optimizers
+        Setup model and discriminator Optimizers
         Returns:
             Tuple[torch.optim.Optimizer, torch.optim.Optimizer]: Model and discriminator optimizers
         """
