@@ -10,7 +10,7 @@ def recursive_to(x: Any, target: torch.device):
         x (Any): Batch of data.
         target (torch.device): Target device.
     Returns:
-        Batch of data where all tensors are transfered to the target device.
+        Batch of data where all tensors are transferred to the target device.
     """
     if isinstance(x, dict):
         return {k: recursive_to(v, target) for k, v in x.items()}
