@@ -9,12 +9,6 @@ Xiaohang Yu, Ti Wang, Mackenzie Weygandt Mathis
 ![PRIMA teaser](images/teaser.png)
 
 
-<!-- This repository provides:
-- animal detection + 3D pose/shape inference demo
-- test-time adaptation (TTA) demo with SuperAnimal 2D keypoints
-- training pipeline (Stage 1 / Stage 2)
-- evaluation on configured datasets -->
-
 ---
 
 
@@ -183,15 +177,6 @@ Two-stage training script:
 ```bash
 bash train.sh
 ```
-
-<!-- This launches:
-- Stage 1: `experiment=primaStage1`
-- Stage 2: `experiment=primaStage2`
-
-Main configs:
-- `configs_hydra/train.yaml`
-- `configs_hydra/experiment/primaStage1.yaml`
-- `configs_hydra/experiment/primaStage2.yaml` -->
 
 Training outputs are written to `logs/train/runs/<exp_name>/`.
 
