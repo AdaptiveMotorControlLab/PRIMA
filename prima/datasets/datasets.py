@@ -54,9 +54,6 @@ class TrainDataset(Dataset):
         image = np.array(Image.open(os.path.join(self.root_image, key)).convert("RGB"))
         mask = np.array(Image.open(os.path.join(self.root_image, data['mask_path'])).convert('L'))
         category_idx = data['supercategory']
-        # if 'reproj_kp_2d' in data:
-        #     keypoint_2d = np.array(data['reproj_kp_2d'], dtype=np.float32)
-        # else:
         keypoint_2d = np.array(data['keypoint_2d'], dtype=np.float32)
         if 'keypoint_3d' in data:
             keypoint_3d = np.concatenate(
@@ -159,9 +156,6 @@ class EvaluationDataset(Dataset):
         image = np.array(Image.open(os.path.join(self.root_image, key)).convert("RGB"))
         mask = np.array(Image.open(os.path.join(self.root_image, data['mask_path'])).convert('L'))
         category_idx = data['supercategory']
-        # if 'reproj_kp_2d' in data:
-        #     keypoint_2d = np.array(data['reproj_kp_2d'], dtype=np.float32)
-        # else:
         keypoint_2d = np.array(data['keypoint_2d'], dtype=np.float32)
         # add check keypoint_3d, make it suitable for 2D dataset, and same with train dataset
         if 'keypoint_3d' in data:
@@ -169,8 +163,6 @@ class EvaluationDataset(Dataset):
                 (data['keypoint_3d'], np.ones((len(data['keypoint_3d']), 1))), axis=-1).astype(np.float32)
         else:
             keypoint_3d = np.zeros((len(keypoint_2d), 4), dtype=np.float32)
-        # keypoint_3d = np.concatenate(
-        #     (data['keypoint_3d'], np.ones((len(data['keypoint_3d']), 1))), axis=-1).astype(np.float32)
         bbox = data['bbox']  # [x, y, w, h]
         center = np.array([(bbox[0] * 2 + bbox[2]) // 2, (bbox[1] * 2 + bbox[3]) // 2])
         pose = np.array(data['pose'], dtype=np.float32) if 'pose' in data else np.zeros(105, dtype=np.float32)  # [105, ]
