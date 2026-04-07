@@ -435,7 +435,7 @@ def fliplr_keypoints(joints: np.array, width: float, flip_permutation: List[int]
     return joints
 
 
-def keypoint_3d_processing(keypoints_3d: np.array, rot: float, filp: bool) -> np.array:
+def keypoint_3d_processing(keypoints_3d: np.array, rot: float, flip: bool) -> np.array:
     """
     Process 3D keypoints (rotation/flipping).
     Args:
@@ -453,7 +453,7 @@ def keypoint_3d_processing(keypoints_3d: np.array, rot: float, filp: bool) -> np
         rot_mat[1, :2] = [sn, cs]
     keypoints_3d[:, :-1] = np.einsum('ij,kj->ki', rot_mat, keypoints_3d[:, :-1])
     # flip the x coordinates
-    if filp:
+    if flip:
         keypoints_3d = fliplr_keypoints(keypoints_3d, list(range(len(keypoints_3d))))
     keypoints_3d = keypoints_3d.astype('float32')
     return keypoints_3d
