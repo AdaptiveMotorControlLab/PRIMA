@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "prima-animal"
-version = "0.1.6"
+version = "0.1.7"
 description = "PRIMA: 3D animal pose and shape estimation"
 readme = "README.md"
 requires-python = ">=3.9"

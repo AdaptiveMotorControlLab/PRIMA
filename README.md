@@ -40,7 +40,7 @@ python -m pip install --no-build-isolation \
 pip install \
   --index-url https://test.pypi.org/simple/ \
   --extra-index-url https://pypi.org/simple \
-  prima-animal==0.1.6
+  prima-animal==0.1.7
 
 # Install PyTorch3D
 python -m pip install --no-build-isolation "git+https://github.com/facebookresearch/pytorch3d.git"
