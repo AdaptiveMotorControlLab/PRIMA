@@ -69,7 +69,7 @@ class PRIMA(pl.LightningModule):
             
 
             
-        # freeze backbones (only dino or dino + aa)
+        # freeze backbones 
         if cfg.MODEL.BACKBONE.get('FREEZE', False) and cfg.MODEL.BACKBONE.FREEZE in ['dinov2', 'dinov3']:
             log.info(f'Freezing only dino backbones parameters')
             for p in self.backbone.parameters(): # freeze dino backbone  
@@ -146,14 +146,7 @@ class PRIMA(pl.LightningModule):
     def get_parameters(self):
         all_params = list(self.smal_head.parameters())
         if self.cfg.MODEL.BACKBONE.TYPE in ['vith', 'dinov2', 'dinov3']:
-            all_params += list(self.backbone.parameters())
-        elif self.cfg.MODEL.BACKBONE.TYPE in ['concat','bb']:
-            all_params += list(self.vit_backbone.parameters())
-            all_params += list(self.dino_backbone.parameters())
-            if hasattr(self, 'aggregator'):
-                all_params += list(self.aggregator.parameters())
-            if hasattr(self, 'fusion'):
-                all_params += list(self.fusion.parameters())     
+            all_params += list(self.backbone.parameters())    
 
 
         if hasattr(self, 'keypoint_projection') and self.keypoint_projection is not None:
