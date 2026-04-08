@@ -13,7 +13,7 @@ Xiaohang Yu, Ti Wang, Mackenzie Weygandt Mathis
 
 
 ## 🚀 TL;DR
-PRIMA creates a 3D quadruped mesh from a single 2D image. It leverages BioCLIP-based biological priors for robust cross-species shape understanding, then applies test-time adaptation with 2D reprojection and auxiliary keypoint guidance to refine SMAL pose and shape predictions. It further uses this adaptation pipeline to build Quadruped3D, a large-scale pseudo-3D dataset with diverse species and poses, achieving state-of-the-art results on Animal3D, CtrlAni3D, Quadruped80K, and Animal Kingdom.
+PRIMA creates a 3D quadruped mesh from a single 2D image. It leverages BioCLIP-based biological priors for robust cross-species shape understanding, then applies test-time adaptation with 2D reprojection and auxiliary keypoint guidance to refine SMAL pose and shape predictions. It further uses this adaptation pipeline to build Quadruped3D, a large-scale pseudo-3D dataset with diverse species and poses, achieving state-of-the-art results on Animal3D, CtrlAni3D, Quadruped80K, and Animal Kingdom datasets.
 
 ## Installation
 
@@ -46,8 +46,7 @@ pip install \
 python -m pip install --no-build-isolation "git+https://github.com/facebookresearch/pytorch3d.git"
 ```
 
-The `prima-animal` package installs most Python dependencies required by PRIMA
-except heavy components such as PyTorch, Detectron2 and PyTorch3D.
+The `prima-animal` package installs most Python dependencies required by PRIMA, except heavy components such as PyTorch, Detectron2 and PyTorch3D.
 
 ### Optional dependencies
 
@@ -168,7 +167,7 @@ you can upload images and visualize PRIMA predictions and adaptation results.
 
 ### Dataset Setup
 
-Download datasets from [Animal3D](https://xujiacong.github.io/Animal3D/), [CtrlAni3D](https://github.com/luoxue-star/AniMer?tab=readme-ov-file#training), Quadruped2D, and [Animal Kingdom](https://drive.google.com/file/d/1dk2a0qB0fbVZ4X6eAgP6VJVXj0rxVfsJ/view?usp=drive_link). For Quadruped2D, download the images from [SuperAnimal-Quadruped80K](https://zenodo.org/records/14016777) and our processed annotations from [here](https://drive.google.com/drive/folders/1eBNboxVwl_eGPoC93zxf-U3hmE6e2f-f?usp=sharing). Put all datasets under `datasets/`.
+Download datasets from [Animal3D](https://xujiacong.github.io/Animal3D/), [CtrlAni3D](https://github.com/luoxue-star/AniMer?tab=readme-ov-file#training), Quadruped2D, and [Animal Kingdom](https://drive.google.com/file/d/1dk2a0qB0fbVZ4X6eAgP6VJVXj0rxVfsJ/view?usp=drive_link). For Quadruped2D, download the images from [SuperAnimal-Quadruped80K](https://zenodo.org/records/14016777) and our processed annotations from [here](https://drive.google.com/drive/folders/1eBNboxVwl_eGPoC93zxf-U3hmE6e2f-f?usp=sharing). Put all the datasets under `datasets/`.
 
 ### Training 
 
