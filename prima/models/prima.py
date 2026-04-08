@@ -57,24 +57,9 @@ class PRIMA(pl.LightningModule):
                 
                 missing_keys, unexpected_keys = self.backbone.load_state_dict(state_dict, strict=False)
         
-   
-        
-        elif cfg.MODEL.BACKBONE.TYPE =='dinov3':
-            log.info(f'Loading DINOv3 backbone weights from torch hub') 
-            # load  feature extractor
-
-            self.backbone = AutoModel.from_pretrained("facebook/dinov3-vitl16-pretrain-lvd1689m")
-            for param in self.backbone.parameters():
-                param.requires_grad = True
-            
-
             
         # freeze backbones 
-        if cfg.MODEL.BACKBONE.get('FREEZE', False) and cfg.MODEL.BACKBONE.FREEZE in ['dinov2', 'dinov3']:
-            log.info(f'Freezing only dino backbones parameters')
-            for p in self.backbone.parameters(): # freeze dino backbone  
-                p.requires_grad = False
-        elif cfg.MODEL.BACKBONE.get('FREEZE', False) and cfg.MODEL.BACKBONE.TYPE == 'vith':
+        if cfg.MODEL.BACKBONE.get('FREEZE', False) and cfg.MODEL.BACKBONE.TYPE == 'vith':
             log.info(f'Freezing first 2/3 blocks of vit backbone')
             # Freeze patch embedding
             if hasattr(self.backbone, 'patch_embed'):
@@ -233,22 +218,7 @@ class PRIMA(pl.LightningModule):
                 # Flatten spatial dimensions into sequence dimension: [B, D, Hp, Wp] -> [B, Hp*Wp, D]
                 B, D, Hp, Wp = conditioning_feats.shape
                 conditioning_feats = conditioning_feats.permute(0, 2, 3, 1).reshape(B, Hp * Wp, D)  # [B, Hp*Wp, D]
-            
-            
-        elif self.cfg.MODEL.BACKBONE.TYPE =='dinov2': # dino backbone, return [1, 329, 1024] 18*18+5=329.  kernel size dinov2=14
-            bb_output = self.backbone(x[:, :, :, :]) # dino use square ? yes # what the output of dino
-            conditioning_feats, cls = bb_output["x_norm_patchtokens"],bb_output['x_norm_clstoken']  #[1,324,1024], [1,1,1024]
-            cls = cls.squeeze(1) # into [B,1024]
-            
-            
-            
-        elif self.cfg.MODEL.BACKBONE.TYPE == 'dinov3': # dino backbone, return [1, 329, 1024] 18*18+5=329.  kernel size dinov2=14; dinov3=16
-            self.backbone.train(self.training)
-            bb_output = self.backbone(x[:, :, :, :])
-            conditioning_feats, cls = bb_output["last_hidden_state"][:,5:,:],bb_output['pooler_output']
-            
-
-        
+     
   
         # add bioclip embedding if enabled
         if self.bioclip_embedding is not None:
