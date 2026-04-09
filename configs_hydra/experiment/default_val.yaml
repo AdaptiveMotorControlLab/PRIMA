@@ -2,9 +2,9 @@
 
 DATASETS:
   ANIMAL3D:
-    ROOT_IMAGE: ./datasets/animal3d/ 
+    ROOT_IMAGE: /home/xiaohang/Xiaohang_workspace/vggt_animal/AniMer/datasets/animal3d/ 
     JSON_FILE:
-      TEST: ./datasets/animal3d/test.json
+      TEST: /home/xiaohang/Xiaohang_workspace/vggt_animal/AniMer/datasets/animal3d/test.json
   CONTROL_ANIMAL3D:
     ROOT_IMAGE: ./datasets/control_animal3dlatest/  
     JSON_FILE:
