@@ -206,7 +206,7 @@ This release builds on several open-source projects, including:
 
 ## Citation
 
-If you use this code in your research, please cite our PRIMA paper (update BibTeX here in your final camera-ready release).
+If you use this code in your research, please cite our PRIMA paper.
 
 ```bibtex
 @misc{yu_prima,
