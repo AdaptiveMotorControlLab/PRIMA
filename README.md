@@ -121,10 +121,6 @@ python demo.py \
   --out_folder demo_out/
 ```
 
-Optional:
-- `--side_view` render side view
-- `--save_mesh` export `.obj`
-
 ---
 
 ### Demo (with TTA)
@@ -139,10 +135,6 @@ python demo_tta.py \
   --tta_lr 1e-6 \
   --tta_num_iters 30
 ```
-
-Notes:
-- `.obj` is exported only when `--save_mesh` is provided.
-- 26-keypoint visualization is saved as `*_prima26_kpts.png`.
 
 ---
 
