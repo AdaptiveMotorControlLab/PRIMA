@@ -10,7 +10,8 @@ Licensed under a modified MIT license
 import os
 
 if 'PYOPENGL_PLATFORM' not in os.environ:
-    os.environ['PYOPENGL_PLATFORM'] = 'egl'
+    # EGL is usually unavailable on macOS; use pyglet there.
+    os.environ['PYOPENGL_PLATFORM'] = 'pyglet' if os.uname().sysname == 'Darwin' else 'egl'
 import torch
 from torchvision.utils import make_grid
 import numpy as np

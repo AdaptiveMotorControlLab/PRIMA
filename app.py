@@ -26,6 +26,7 @@ import os
 import tempfile
 from types import SimpleNamespace
 from typing import List, Tuple
+from pathlib import Path
 
 import cv2
 import gradio as gr
@@ -63,6 +64,16 @@ DEFAULT_OUT_FOLDER = "demo_out_tta_gradio"
 
 def _load_prima_model(checkpoint_path: str = DEFAULT_CHECKPOINT):
     """Load PRIMA model and renderer once for the Gradio app."""
+    checkpoint = Path(checkpoint_path)
+    cfg_path = checkpoint.parent.parent / ".hydra" / "config.yaml"
+    if not checkpoint.exists():
+        raise FileNotFoundError(
+            f"Missing checkpoint: {checkpoint}. Download demo checkpoints/data as described in README."
+        )
+    if not cfg_path.exists():
+        raise FileNotFoundError(
+            f"Missing model config: {cfg_path}. Ensure the full checkpoint folder layout from README is present."
+        )
 
     model, model_cfg = load_prima(checkpoint_path)
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
