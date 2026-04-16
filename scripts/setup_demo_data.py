@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """
-Download and arrange PRIMA demo assets into the expected data/ layout.
+PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation
 
-Usage:
-  python scripts/setup_demo_data.py
-  python scripts/setup_demo_data.py --force
+Official implementation of the paper:
+"PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation"
+by Xiaohang Yu, Ti Wang, and Mackenzie Weygandt Mathis
+Licensed under a modified MIT license
 """
+# Download and arrange PRIMA demo assets into the expected data/ layout.
+# Usage:
+#   python scripts/setup_demo_data.py
+#   python scripts/setup_demo_data.py --force
 
 from __future__ import annotations
 
