@@ -17,7 +17,7 @@ PRIMA creates a 3D quadruped mesh from a single 2D image. It leverages BioCLIP-b
 
 ## Installation
 
-### Install from PyPI
+### Local setup (recommended for running demos from this repository)
 
 > Recommended: Python 3.10 and a CUDA-enabled PyTorch installation that you manage yourself.
 
@@ -36,17 +36,25 @@ pip install --index-url https://download.pytorch.org/whl/cu118 \
 python -m pip install --no-build-isolation \
       "git+https://github.com/mattloper/chumpy.git"
 
-# Install PRIMA core package (from PyPI / TestPyPI)
-pip install \
-  --index-url https://test.pypi.org/simple/ \
-  --extra-index-url https://pypi.org/simple \
-  prima-animal==0.1.7
+# Install PRIMA from this cloned repository
+pip install -e .
 
 # Install PyTorch3D
 python -m pip install --no-build-isolation "git+https://github.com/facebookresearch/pytorch3d.git"
 ```
 
-The `prima-animal` package installs most Python dependencies required by PRIMA, except heavy components such as PyTorch, Detectron2 and PyTorch3D.
+The local editable install (`pip install -e .`) installs the core PRIMA Python package from your cloned source tree. Heavy components such as PyTorch, Detectron2 and PyTorch3D are still installed separately.
+
+### Install from PyPI (package-only usage)
+
+If you only want to consume the package and not edit repo code:
+
+```bash
+pip install \
+  --index-url https://test.pypi.org/simple/ \
+  --extra-index-url https://pypi.org/simple \
+  prima-animal==0.1.7
+```
 
 ### Optional dependencies
 
@@ -68,6 +76,12 @@ needed for certain demos or advanced features:
   ```bash
   pip install "deeplabcut@git+https://github.com/DeepLabCut/DeepLabCut.git"
   ```
+
+### Demo dependency matrix
+
+- `demo.py` (no TTA): requires **Detectron2**
+- `demo_tta.py` (with TTA): requires **Detectron2 + DeepLabCut**
+- `app.py` (Gradio web demo): requires **Detectron2 + DeepLabCut** (plus Gradio, already in `prima-animal` dependencies)
 
 ---
 
@@ -121,6 +135,8 @@ python demo.py \
   --out_folder demo_out/
 ```
 
+Outputs are written to `demo_out/`.
+
 ---
 
 ### Demo (with TTA)
@@ -132,9 +148,13 @@ Example:
 ```bash
 python demo_tta.py \
   --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt \
+  --img_folder demo_data/ \
+  --out_folder demo_out_tta/ \
   --tta_lr 1e-6 \
   --tta_num_iters 30
 ```
+
+Outputs are written to `demo_out_tta/` (before/after TTA renders, keypoints, and optional meshes).
 
 ---
 
@@ -149,7 +169,7 @@ python app.py \
   --out_folder demo_out_tta_gradio/
 ```
 
-This will start a local Gradio app (by default on http://127.0.0.1:7860), where
+This starts a local Gradio app (by default on http://127.0.0.1:7860), where
 you can upload images and visualize PRIMA predictions and adaptation results.
 
 ---
