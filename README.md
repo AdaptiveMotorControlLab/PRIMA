@@ -47,12 +47,13 @@ pip install prima-animal
 
 ### Checkpoints and data
 
-Create a `data/` folder under the project root and download the required files into it:
+Recommended: use the helper script to download and place all demo assets automatically:
 
 ```bash
-mkdir -p data/smal
+python scripts/setup_demo_data.py
 ```
 
+Manual fallback (if needed):
 1. **SMAL model** -- download from [here](https://drive.google.com/drive/folders/1O1tWYimVMA7hEbnwuPyiDWh90tUGoTPB?usp=drive_link) and place the `.pkl` files under `data/smal/`
 2. **Pretrained backbone** -- download from [here](https://drive.google.com/file/d/1jOJXJVPXnWX7W7vqYVt0joJZr4C8x-Yo/view?usp=drive_link) and place at `data/amr_vitbb.pth`
 3. **Stage-1 checkpoint** -- download from [here](https://drive.google.com/drive/folders/1pwIpYwP3aJ6W2M3-WhEvcFjW38-4j405?usp=drive_link) and place under `data/PRIMAS1/`
