@@ -17,71 +17,29 @@ PRIMA creates a 3D quadruped mesh from a single 2D image. It leverages BioCLIP-b
 
 ## Installation
 
-### Local setup (recommended for running demos from this repository)
+### Install from PyPI
 
-> Recommended: Python 3.10 and a CUDA-enabled PyTorch installation that you manage yourself.
+> Recommended: Python 3.10 and a CUDA-enabled PyTorch installation.
 
 ```bash
 conda create -n prima python=3.10 -y
 conda activate prima
 
-git clone https://github.com/AdaptiveMotorControlLab/PRIMA.git
-cd PRIMA
-
 # Install PyTorch matching your CUDA (example: CUDA 11.8)
 pip install --index-url https://download.pytorch.org/whl/cu118 \
     "torch==2.2.1" "torchvision==0.17.1" "torchaudio==2.2.1"
 
-# Install chumpy
+# Install chumpy and PyTorch3D
 python -m pip install --no-build-isolation \
       "git+https://github.com/mattloper/chumpy.git"
+python -m pip install --no-build-isolation \
+      "git+https://github.com/facebookresearch/pytorch3d.git"
 
-# Install PRIMA from this cloned repository
-pip install -e .
-
-# Install PyTorch3D
-python -m pip install --no-build-isolation "git+https://github.com/facebookresearch/pytorch3d.git"
+# Install PRIMA from PyPI
+pip install prima-animal==0.1.7
 ```
 
-The local editable install (`pip install -e .`) installs the core PRIMA Python package from your cloned source tree. Heavy components such as PyTorch, Detectron2 and PyTorch3D are still installed separately.
-
-### Install from PyPI (package-only usage)
-
-If you only want to consume the package and not edit repo code:
-
-```bash
-pip install \
-  --index-url https://test.pypi.org/simple/ \
-  --extra-index-url https://pypi.org/simple \
-  prima-animal==0.1.7
-```
-
-### Optional dependencies
-
-The following packages are **not** hard requirements of `prima-animal`, but are
-needed for certain demos or advanced features:
-
-- **Detectron2** – animal detection backbone used in `demo.py`, `demo_tta.py`, and `app.py`:
-
-  ```bash
-  # See Detectron2 docs and choose the wheel matching your torch/CUDA
-  python -m pip install --no-build-isolation \
-      "git+https://github.com/facebookresearch/detectron2.git"
-  ```
-
-
-- **DeepLabCut** – only required when using 2D keypoint TTA in
-  `demo_tta.py` and `app.py`:
-
-  ```bash
-  pip install "deeplabcut@git+https://github.com/DeepLabCut/DeepLabCut.git"
-  ```
-
-### Demo dependency matrix
-
-- `demo.py` (no TTA): requires **Detectron2**
-- `demo_tta.py` (with TTA): requires **Detectron2 + DeepLabCut**
-- `app.py` (Gradio web demo): requires **Detectron2 + DeepLabCut** (plus Gradio, already in `prima-animal` dependencies)
+`prima-animal` includes demo runtime dependencies used by `demo.py`, `demo_tta.py`, and `app.py` (including Detectron2 and DeepLabCut).
 
 ---
 
