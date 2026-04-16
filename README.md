@@ -36,7 +36,7 @@ python -m pip install --no-build-isolation \
       "git+https://github.com/facebookresearch/pytorch3d.git"
 
 # Install PRIMA from PyPI
-pip install prima-animal==0.1.7
+pip install prima-animal
 ```
 
 `prima-animal` includes demo runtime dependencies used by `demo.py`, `demo_tta.py`, and `app.py` (including Detectron2 and DeepLabCut).
