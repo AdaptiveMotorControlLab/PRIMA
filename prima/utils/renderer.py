@@ -211,7 +211,8 @@ class Renderer:
             alphaMode='OPAQUE',
             baseColorFactor=(*mesh_base_color, 1.0))
 
-        camera_translation[0] *= -1.
+        camera_translation_local = camera_translation.copy()
+        camera_translation_local[0] *= -1.
 
         mesh = trimesh.Trimesh(vertices.copy(), self.faces.copy())
         if side_view:
@@ -228,7 +229,7 @@ class Renderer:
         scene.add(mesh, 'mesh')
 
         camera_pose = np.eye(4)
-        camera_pose[:3, 3] = camera_translation
+        camera_pose[:3, 3] = camera_translation_local
         camera_center = [image.shape[1] / 2., image.shape[0] / 2.]
         camera = pyrender.IntrinsicsCamera(fx=focal_length_to_use, fy=focal_length_to_use,
                                            cx=camera_center[0], cy=camera_center[1], zfar=1e12)

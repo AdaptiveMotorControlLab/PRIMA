@@ -38,13 +38,12 @@ def task_wrapper(task_func: Callable) -> Callable:
     """
 
     def wrap(cfg: DictConfig):
-
-        # apply extra utilities
-        extras(cfg)
-
-        # execute the task
+        start_time = time.time()
         try:
-            start_time = time.time()
+            # apply extra utilities
+            extras(cfg)
+
+            # execute the task
             ret = task_func(cfg=cfg)
         except Exception as ex:
             log.exception("")  # save exception to `.log` file
