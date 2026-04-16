@@ -68,6 +68,12 @@ dependencies = [
   # Training framework
   "pytorch-lightning==2.5.5",
 
+  # Build/runtime helpers needed for older mmcv installation flows
+  "setuptools<81",
+  "packaging<25",
+  "Cython<3",
+  "wheel",
+
   # Demo runtime dependencies (included in main PyPI install)
   "detectron2 @ git+https://github.com/facebookresearch/detectron2.git",
   "deeplabcut",
