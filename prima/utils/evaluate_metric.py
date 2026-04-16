@@ -110,6 +110,8 @@ class Evaluator:
         if pck_threshold is not None:
             for i in range(len(pck_threshold)):
                 self.pck_threshold_list.append(torch.tensor([pck_threshold[i]] * len(pred_keypoints_2d), dtype=torch.float32))
+        if len(self.pck_threshold_list) == 0:
+            return torch.tensor([], dtype=torch.float32)
 
         pcks = []
         # Use mask area if available, otherwise use full image area
@@ -118,7 +120,7 @@ class Evaluator:
         else:
             # Use full image area as fallback
             seg_area = torch.tensor([self.image_size * self.image_size] * len(pred_keypoints_2d), dtype=torch.float32).unsqueeze(-1)
-        total_visible = torch.sum(conf, dim=-1)
+        total_visible = torch.sum(conf, dim=-1).clamp_min(1e-6)
         for th in self.pck_threshold_list:
             dist = torch.norm(pred_keypoints_2d - gt_keypoints_2d, dim=-1)
 
@@ -147,7 +149,7 @@ class Evaluator:
         Returns: evaluate metric
         """
         if batch['has_smal_params']["betas"].sum() == 0:
-            return 0., 0., 0., [0., 0.], 0.
+            return 0., 0.
 
         pred_keypoints_3d = output["pred_keypoints_3d"].detach()
         pred_keypoints_3d = pred_keypoints_3d[:, None, :, :]
