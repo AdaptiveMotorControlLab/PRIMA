@@ -1,4 +1,13 @@
 """
+PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation
+
+Official implementation of the paper:
+"PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation"
+by Xiaohang Yu, Ti Wang, and Mackenzie Weygandt Mathis
+Licensed under a modified MIT license
+"""
+
+"""
 Parts of the code are taken or adapted from
 https://github.com/mkocabas/EpipolarPose/blob/master/lib/utils/img_utils.py
 """

@@ -1,3 +1,12 @@
+"""
+PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation
+
+Official implementation of the paper:
+"PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation"
+by Xiaohang Yu, Ti Wang, and Mackenzie Weygandt Mathis
+Licensed under a modified MIT license
+"""
+
 '''
 this scripts if to convert DeepLabCut labeled data format (20 keypoints) to COCO format (26 keypoints ), also image should be extracted from the raw video to save as frames.
 
