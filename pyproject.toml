@@ -67,6 +67,10 @@ dependencies = [
 
   # Training framework
   "pytorch-lightning==2.5.5",
+
+  # Demo runtime dependencies (included in main PyPI install)
+  "detectron2 @ git+https://github.com/facebookresearch/detectron2.git",
+  "deeplabcut",
 ]
 
 [project.optional-dependencies]

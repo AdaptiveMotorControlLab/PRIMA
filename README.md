@@ -19,55 +19,27 @@ PRIMA creates a 3D quadruped mesh from a single 2D image. It leverages BioCLIP-b
 
 ### Install from PyPI
 
-> Recommended: Python 3.10 and a CUDA-enabled PyTorch installation that you manage yourself.
+> Recommended: Python 3.10 and a CUDA-enabled PyTorch installation.
 
 ```bash
 conda create -n prima python=3.10 -y
 conda activate prima
 
-git clone https://github.com/AdaptiveMotorControlLab/PRIMA.git
-cd PRIMA
-
 # Install PyTorch matching your CUDA (example: CUDA 11.8)
 pip install --index-url https://download.pytorch.org/whl/cu118 \
     "torch==2.2.1" "torchvision==0.17.1" "torchaudio==2.2.1"
 
-# Install chumpy
+# Install chumpy and PyTorch3D
 python -m pip install --no-build-isolation \
       "git+https://github.com/mattloper/chumpy.git"
+python -m pip install --no-build-isolation \
+      "git+https://github.com/facebookresearch/pytorch3d.git"
 
-# Install PRIMA core package (from PyPI / TestPyPI)
-pip install \
-  --index-url https://test.pypi.org/simple/ \
-  --extra-index-url https://pypi.org/simple \
-  prima-animal==0.1.7
-
-# Install PyTorch3D
-python -m pip install --no-build-isolation "git+https://github.com/facebookresearch/pytorch3d.git"
+# Install PRIMA from PyPI
+pip install prima-animal
 ```
 
-The `prima-animal` package installs most Python dependencies required by PRIMA, except heavy components such as PyTorch, Detectron2 and PyTorch3D.
-
-### Optional dependencies
-
-The following packages are **not** hard requirements of `prima-animal`, but are
-needed for certain demos or advanced features:
-
-- **Detectron2** – animal detection backbone used in `demo.py`, `demo_tta.py`, and `app.py`:
-
-  ```bash
-  # See Detectron2 docs and choose the wheel matching your torch/CUDA
-  python -m pip install --no-build-isolation \
-      "git+https://github.com/facebookresearch/detectron2.git"
-  ```
-
-
-- **DeepLabCut** – only required when using 2D keypoint TTA in
-  `demo_tta.py` and `app.py`:
-
-  ```bash
-  pip install "deeplabcut@git+https://github.com/DeepLabCut/DeepLabCut.git"
-  ```
+`prima-animal` includes demo runtime dependencies used by `demo.py`, `demo_tta.py`, and `app.py` (including Detectron2 and DeepLabCut).
 
 ---
 
@@ -121,6 +93,8 @@ python demo.py \
   --out_folder demo_out/
 ```
 
+Outputs are written to `demo_out/`.
+
 ---
 
 ### Demo (with TTA)
@@ -132,9 +106,13 @@ Example:
 ```bash
 python demo_tta.py \
   --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt \
+  --img_folder demo_data/ \
+  --out_folder demo_out_tta/ \
   --tta_lr 1e-6 \
   --tta_num_iters 30
 ```
+
+Outputs are written to `demo_out_tta/` (before/after TTA renders, keypoints, and optional meshes).
 
 ---
 
@@ -149,7 +127,7 @@ python app.py \
   --out_folder demo_out_tta_gradio/
 ```
 
-This will start a local Gradio app (by default on http://127.0.0.1:7860), where
+This starts a local Gradio app (by default on http://127.0.0.1:7860), where
 you can upload images and visualize PRIMA predictions and adaptation results.
 
 ---
