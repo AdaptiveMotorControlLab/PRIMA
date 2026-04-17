@@ -30,10 +30,9 @@ BACKBONE_FILE_URL = "https://drive.google.com/file/d/1jOJXJVPXnWX7W7vqYVt0joJZr4
 # Stage assets are fetched as explicit files (not whole folder download)
 # to avoid pulling extra checkpoints and to keep setup deterministic.
 STAGE1_CONFIG_URL = "https://drive.google.com/file/d/1Q1uNfkBDUPWjCF64xEOWxw1wygftlJBa/view"
-STAGE1_CHECKPOINT_URL = "https://drive.google.com/file/d/1TNH1WD0t2nVdkWrFpcwnnt95axdI4Vik/view"
-STAGE1_FALLBACK_CHECKPOINT_URL = "https://drive.google.com/file/d/1Y3YG7FFp4PHqVYjUaYicb4W3SoFS5qmd/view"
+STAGE1_CHECKPOINT_URL = "https://drive.google.com/file/d/12WYwwYE-ru8NT_9VgM7Ock--et-VB43v/view"
 STAGE3_CONFIG_URL = "https://drive.google.com/file/d/1gtBhuLShgLv72ZqUo4FiKben_x0toOrB/view"
-STAGE3_CHECKPOINT_URL = "https://drive.google.com/file/d/1jWMB9kScrHd_3f0f-JrWnrdFJFyNfF24/view"
+STAGE3_CHECKPOINT_URL = "https://drive.google.com/file/d/1gLXfqyhRaEUiENgv9shjIdJg_73tonk4/view"
 
 
 def run_gdown(args: list[str]) -> None:
@@ -189,7 +188,6 @@ def main() -> int:
         "s1ckpt.ckpt",
         data_dir,
         force=args.force,
-        fallback_checkpoint_url=STAGE1_FALLBACK_CHECKPOINT_URL,
     )
     maybe_download_stage(
         "PRIMAS3",
