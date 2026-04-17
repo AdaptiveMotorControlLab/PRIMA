@@ -21,11 +21,19 @@ import sys
 import tempfile
 from pathlib import Path
 
+import torch
+
 
 SMAL_FOLDER_URL = "https://drive.google.com/drive/folders/1O1tWYimVMA7hEbnwuPyiDWh90tUGoTPB"
 BACKBONE_FILE_URL = "https://drive.google.com/file/d/1jOJXJVPXnWX7W7vqYVt0joJZr4C8x-Yo/view"
-STAGE1_FOLDER_URL = "https://drive.google.com/drive/folders/1pwIpYwP3aJ6W2M3-WhEvcFjW38-4j405"
-STAGE3_FOLDER_URL = "https://drive.google.com/drive/folders/1DO6idTCORL5G6PLjikRaIjCXmo_-Ut31"
+
+# Stage assets are fetched as explicit files (not whole folder download)
+# to avoid pulling extra checkpoints and to keep setup deterministic.
+STAGE1_CONFIG_URL = "https://drive.google.com/file/d/1Q1uNfkBDUPWjCF64xEOWxw1wygftlJBa/view"
+STAGE1_CHECKPOINT_URL = "https://drive.google.com/file/d/1TNH1WD0t2nVdkWrFpcwnnt95axdI4Vik/view"
+STAGE1_FALLBACK_CHECKPOINT_URL = "https://drive.google.com/file/d/1Y3YG7FFp4PHqVYjUaYicb4W3SoFS5qmd/view"
+STAGE3_CONFIG_URL = "https://drive.google.com/file/d/1gtBhuLShgLv72ZqUo4FiKben_x0toOrB/view"
+STAGE3_CHECKPOINT_URL = "https://drive.google.com/file/d/1jWMB9kScrHd_3f0f-JrWnrdFJFyNfF24/view"
 
 
 def run_gdown(args: list[str]) -> None:
@@ -38,6 +46,26 @@ def run_gdown(args: list[str]) -> None:
             "gdown failed. Install it with: pip install gdown\n"
             f"Failed command: {' '.join(cmd)}"
         )
+
+
+def try_run_gdown(args: list[str]) -> tuple[bool, str]:
+    cmd = [sys.executable, "-m", "gdown", *args]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode == 0:
+        return True, ""
+    error_output = f"{result.stdout}\n{result.stderr}".strip()
+    return False, error_output
+
+
+def validate_torch_checkpoint(path: Path) -> None:
+    try:
+        torch.load(path, map_location="cpu")
+    except Exception as exc:
+        raise RuntimeError(
+            f"Checkpoint file is invalid or incomplete: {path}\n"
+            "Google Drive may have returned a partial/quota-limited file. "
+            "Please retry later or download manually from the README links and place it in data/."
+        ) from exc
 
 
 def copy_required_file(search_root: Path, filename: str, dst: Path) -> None:
@@ -86,7 +114,15 @@ def maybe_download_smal(data_dir: Path, force: bool) -> None:
     print(f"[ok] {smal_dir}")
 
 
-def maybe_download_stage(stage_name: str, url: str, ckpt_name: str, data_dir: Path, force: bool) -> None:
+def maybe_download_stage(
+    stage_name: str,
+    config_url: str,
+    checkpoint_url: str,
+    ckpt_name: str,
+    data_dir: Path,
+    force: bool,
+    fallback_checkpoint_url: str | None = None,
+) -> None:
     stage_dir = data_dir / stage_name
     cfg_target = stage_dir / ".hydra" / "config.yaml"
     ckpt_target = stage_dir / "checkpoints" / ckpt_name
@@ -95,11 +131,25 @@ def maybe_download_stage(stage_name: str, url: str, ckpt_name: str, data_dir: Pa
         return
 
     print(f"[download] {stage_name} assets")
-    with tempfile.TemporaryDirectory(prefix=f"prima_{stage_name.lower()}_") as tmp:
-        tmpdir = Path(tmp)
-        run_gdown(["--folder", url, "-O", str(tmpdir)])
-        copy_required_file(tmpdir, "config.yaml", cfg_target)
-        copy_required_file(tmpdir, ckpt_name, ckpt_target)
+    cfg_target.parent.mkdir(parents=True, exist_ok=True)
+    ckpt_target.parent.mkdir(parents=True, exist_ok=True)
+    run_gdown(["--fuzzy", config_url, "-O", str(cfg_target)])
+    ok, err = try_run_gdown(["--fuzzy", checkpoint_url, "-O", str(ckpt_target)])
+    if not ok:
+        quota_error = "Too many users have viewed or downloaded this file recently" in err
+        if fallback_checkpoint_url and quota_error:
+            print(
+                f"[warn] {stage_name} primary checkpoint is quota-limited. "
+                "Trying fallback checkpoint from the same Drive folder."
+            )
+            run_gdown(["--fuzzy", fallback_checkpoint_url, "-O", str(ckpt_target)])
+        else:
+            sys.stderr.write(err + "\n")
+            raise RuntimeError(
+                "gdown failed. Install it with: pip install gdown\n"
+                f"Failed command: {sys.executable} -m gdown --fuzzy {checkpoint_url} -O {ckpt_target}"
+            )
+    validate_torch_checkpoint(ckpt_target)
     print(f"[ok] {stage_dir}")
 
 
@@ -117,6 +167,8 @@ def verify_layout(data_dir: Path) -> None:
     missing = [p for p in required_paths if not p.exists()]
     if missing:
         raise FileNotFoundError("Missing required files:\n" + "\n".join(str(p) for p in missing))
+    validate_torch_checkpoint(data_dir / "PRIMAS1" / "checkpoints" / "s1ckpt.ckpt")
+    validate_torch_checkpoint(data_dir / "PRIMAS3" / "checkpoints" / "s3ckpt.ckpt")
 
 
 def main() -> int:
@@ -130,8 +182,23 @@ def main() -> int:
 
     maybe_download_smal(data_dir, force=args.force)
     maybe_download_backbone(data_dir, force=args.force)
-    maybe_download_stage("PRIMAS1", STAGE1_FOLDER_URL, "s1ckpt.ckpt", data_dir, force=args.force)
-    maybe_download_stage("PRIMAS3", STAGE3_FOLDER_URL, "s3ckpt.ckpt", data_dir, force=args.force)
+    maybe_download_stage(
+        "PRIMAS1",
+        STAGE1_CONFIG_URL,
+        STAGE1_CHECKPOINT_URL,
+        "s1ckpt.ckpt",
+        data_dir,
+        force=args.force,
+        fallback_checkpoint_url=STAGE1_FALLBACK_CHECKPOINT_URL,
+    )
+    maybe_download_stage(
+        "PRIMAS3",
+        STAGE3_CONFIG_URL,
+        STAGE3_CHECKPOINT_URL,
+        "s3ckpt.ckpt",
+        data_dir,
+        force=args.force,
+    )
     verify_layout(data_dir)
 
     print("\n[done] Demo assets ready.")
