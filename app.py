@@ -222,11 +222,42 @@ def _collect_animal_results(
 
         # Prepare patch for SuperAnimal
         patch_rgb = denorm_patch_to_rgb(batch["img"][0])
-        with tempfile.TemporaryDirectory(prefix=f"dlc_{img_fn}_{animal_id}_") as tmp_dir:
-            bodyparts_xyc = run_superanimal_on_patch(patch_rgb, SUPER_ANIMAL_ARGS, tmp_dir)
+        try:
+            with tempfile.TemporaryDirectory(prefix=f"dlc_{img_fn}_{animal_id}_") as tmp_dir:
+                bodyparts_xyc = run_superanimal_on_patch(patch_rgb, SUPER_ANIMAL_ARGS, tmp_dir)
+        except RuntimeError as e:
+            # If DeepLabCut is unavailable in the runtime env, keep demo inference
+            # functional by falling back to no-TTA for this animal.
+            if "DeepLabCut SuperAnimal API" in str(e):
+                print(f"[warn] {e}; skipping TTA for animal {animal_id}.")
+                bodyparts_xyc = None
+            else:
+                raise
 
         if bodyparts_xyc is None:
-            # No keypoints => skip TTA for this animal
+            # No keypoints => skip TTA for this animal while still returning outputs.
+            render_and_save(
+                renderer,
+                out_before,
+                batch,
+                img_fn,
+                animal_id,
+                out_folder,
+                suffix="after_tta",
+                side_view=side_view,
+                save_mesh=save_mesh,
+            )
+
+            after_png_path = os.path.join(out_folder, f"{img_fn}_{animal_id}_after_tta.png")
+            if os.path.exists(after_png_path):
+                after_bgr = cv2.imread(after_png_path)
+                if after_bgr is not None:
+                    after_imgs.append(cv2.cvtColor(after_bgr, cv2.COLOR_BGR2RGB))
+
+            if save_mesh:
+                after_obj_path = os.path.join(out_folder, f"{img_fn}_{animal_id}_after_tta.obj")
+                if os.path.exists(after_obj_path):
+                    after_mesh_paths.append(after_obj_path)
             continue
 
         mapped_xyc = map_superanimal_to_prima(bodyparts_xyc)
