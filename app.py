@@ -297,8 +297,13 @@ def _collect_animal_results(
 
 def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFAULT_OUT_FOLDER) -> gr.Interface:
     os.makedirs(out_folder, exist_ok=True)
-    model, model_cfg, renderer, device = _load_prima_model(checkpoint_path)
-    detector = _build_detector()
+    runtime_cache = {
+        "model": None,
+        "model_cfg": None,
+        "renderer": None,
+        "device": None,
+        "detector": None,
+    }
 
     def gradio_inference(
         image: np.ndarray,
@@ -319,12 +324,25 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
         else:
             img_rgb = image
 
+        if runtime_cache["model"] is None:
+            try:
+                model, model_cfg, renderer, device = _load_prima_model(checkpoint_path)
+                detector = _build_detector()
+            except Exception as e:
+                print(f"[error] Model initialization failed: {type(e).__name__}: {e}")
+                return [], [], [], None, None
+            runtime_cache["model"] = model
+            runtime_cache["model_cfg"] = model_cfg
+            runtime_cache["renderer"] = renderer
+            runtime_cache["device"] = device
+            runtime_cache["detector"] = detector
+
         before_imgs, after_imgs, kpt_imgs, mesh_before, mesh_after = _collect_animal_results(
-            model,
-            model_cfg,
-            renderer,
-            device,
-            detector,
+            runtime_cache["model"],
+            runtime_cache["model_cfg"],
+            runtime_cache["renderer"],
+            runtime_cache["device"],
+            runtime_cache["detector"],
             out_folder,
             img_rgb,
             tta_lr=tta_lr,
