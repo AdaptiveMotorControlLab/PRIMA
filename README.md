@@ -13,7 +13,11 @@ Xiaohang Yu, Ti Wang, Mackenzie Weygandt Mathis
 
 
 ## 🚀 TL;DR
-PRIMA creates a 3D quadruped mesh from a single 2D image. It leverages BioCLIP-based biological priors for robust cross-species shape understanding, then applies test-time adaptation with 2D reprojection and auxiliary keypoint guidance to refine SMAL pose and shape predictions. It further uses this adaptation pipeline to build Quadruped3D, a large-scale pseudo-3D dataset with diverse species and poses, achieving state-of-the-art results on Animal3D, CtrlAni3D, Quadruped2D, and Animal Kingdom datasets.
+PRIMA creates a 3D quadruped mesh from a single 2D image. It leverages BioCLIP-based biological priors for robust cross-species shape understanding, then applies test-time adaptation with 2D reprojection and auxiliary keypoint guidance to refine SMAL pose and shape predictions. 
+
+It further can be used to build Quadruped3D, a large-scale pseudo-3D dataset with diverse species and poses. 
+
+PRIMA achieves state-of-the-art results on Animal3D, CtrlAni3D, Quadruped2D, and Animal Kingdom datasets.
 
 ## Installation
 
@@ -47,41 +51,22 @@ pip install prima-animal
 
 ### Checkpoints and data
 
-Recommended: use the helper script to download and place all demo assets automatically:
+We provide an automated demo-download script for models hosted on Hugging Face.
+Use the helper script to download and place all demo assets automatically in `data/`:
 
 ```bash
-python scripts/setup_demo_data.py
+python scripts/setup_demo_data.py --hf-repo-id MLAdaptiveIntelligence/PRIMA
 ```
 
-Manual fallback (if needed):
-1. **SMAL model** -- download from [here](https://drive.google.com/drive/folders/1O1tWYimVMA7hEbnwuPyiDWh90tUGoTPB?usp=drive_link) and place the `.pkl` files under `data/smal/`
-2. **Pretrained backbone** -- download from [here](https://drive.google.com/file/d/1jOJXJVPXnWX7W7vqYVt0joJZr4C8x-Yo/view?usp=drive_link) and place at `data/amr_vitbb.pth`
-3. **Stage-1 checkpoint** -- download from [here](https://drive.google.com/drive/folders/1pwIpYwP3aJ6W2M3-WhEvcFjW38-4j405?usp=drive_link) and place under `data/PRIMAS1/`
-4. **Stage-3 checkpoint** -- download from [here](https://drive.google.com/drive/folders/1DO6idTCORL5G6PLjikRaIjCXmo_-Ut31?usp=drive_link) and place under `data/PRIMAS3/`
-
-After downloading, the expected layout is:
-
-```
-PRIMA/
-└── data/
-    ├── smal/
-    │   ├── my_smpl_00781_4_all.pkl
-    │   ├── my_smpl_data_00781_4_all.pkl
-    │   └── walking_toy_symmetric_pose_prior_with_cov_35parts.pkl
-    ├── amr_vitbb.pth
-    ├── PRIMAS1/
-    │   ├── .hydra/
-    │   │   └── config.yaml
-    │   └── checkpoints/
-    │       └── s1ckpt.ckpt
-    └── PRIMAS3/
-        ├── .hydra/
-        │   └── config.yaml
-        └── checkpoints/
-            └── s3ckpt.ckpt
-```
-
----
+Expected files in that Hugging Face repo root:
+- `my_smpl_00781_4_all.pkl`
+- `my_smpl_data_00781_4_all.pkl`
+- `walking_toy_symmetric_pose_prior_with_cov_35parts.pkl`
+- `amr_vitbb.pth`
+- `config_s1_HYDRA.yaml`
+- `config_s3_HYDRA.yaml`
+- `s1ckpt.ckpt`
+- `s3ckpt.ckpt`
 
 ### Demo (without TTA)
 
@@ -183,7 +168,6 @@ If you use this code in your research, please cite our PRIMA paper.
 @misc{yu_prima,
   title={PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation},
   author={Xiaohang Yu and Ti Wang and Mackenzie Weygandt Mathis},
-  note={EPFL project page. Update publication year, venue, and links when available.}
 }
 ```
 

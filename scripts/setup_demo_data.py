@@ -15,45 +15,46 @@ Licensed under a modified MIT license
 from __future__ import annotations
 
 import argparse
-import shutil
-import subprocess
+import urllib.error
+import urllib.request
 import sys
-import tempfile
 from pathlib import Path
 
 import torch
 
+DEFAULT_HF_REPO_ID = "YOUR_ORG_OR_USER/PRIMA-demo-assets"
+HF_RESOLVE_URL = "https://huggingface.co/{repo_id}/resolve/main/{asset_path}?download=1"
 
-SMAL_FOLDER_URL = "https://drive.google.com/drive/folders/1O1tWYimVMA7hEbnwuPyiDWh90tUGoTPB"
-BACKBONE_FILE_URL = "https://drive.google.com/file/d/1jOJXJVPXnWX7W7vqYVt0joJZr4C8x-Yo/view"
-
-# Stage assets are fetched as explicit files (not whole folder download)
-# to avoid pulling extra checkpoints and to keep setup deterministic.
-STAGE1_CONFIG_URL = "https://drive.google.com/file/d/1Q1uNfkBDUPWjCF64xEOWxw1wygftlJBa/view"
-STAGE1_CHECKPOINT_URL = "https://drive.google.com/file/d/12WYwwYE-ru8NT_9VgM7Ock--et-VB43v/view"
-STAGE3_CONFIG_URL = "https://drive.google.com/file/d/1gtBhuLShgLv72ZqUo4FiKben_x0toOrB/view"
-STAGE3_CHECKPOINT_URL = "https://drive.google.com/file/d/1gLXfqyhRaEUiENgv9shjIdJg_73tonk4/view"
-
-
-def run_gdown(args: list[str]) -> None:
-    cmd = [sys.executable, "-m", "gdown", *args]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        sys.stderr.write(result.stdout)
-        sys.stderr.write(result.stderr)
-        raise RuntimeError(
-            "gdown failed. Install it with: pip install gdown\n"
-            f"Failed command: {' '.join(cmd)}"
-        )
+SMAL_ASSET_PATHS = [
+    "my_smpl_00781_4_all.pkl",
+    "my_smpl_data_00781_4_all.pkl",
+    "walking_toy_symmetric_pose_prior_with_cov_35parts.pkl",
+]
+BACKBONE_ASSET_PATH = "amr_vitbb.pth"
+STAGE1_CONFIG_ASSET_PATH = "config_s1_HYDRA.yaml"
+STAGE1_CHECKPOINT_ASSET_PATH = "s1ckpt.ckpt"
+STAGE3_CONFIG_ASSET_PATH = "config_s3_HYDRA.yaml"
+STAGE3_CHECKPOINT_ASSET_PATH = "s3ckpt.ckpt"
 
 
-def try_run_gdown(args: list[str]) -> tuple[bool, str]:
-    cmd = [sys.executable, "-m", "gdown", *args]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode == 0:
-        return True, ""
-    error_output = f"{result.stdout}\n{result.stderr}".strip()
-    return False, error_output
+def build_hf_url(repo_id: str, asset_path: str) -> str:
+    return HF_RESOLVE_URL.format(repo_id=repo_id, asset_path=asset_path)
+
+
+def download_file(url: str, target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    request = urllib.request.Request(url, headers={"User-Agent": "prima-setup-demo-data/1.0"})
+    try:
+        with urllib.request.urlopen(request) as response, target.open("wb") as f:
+            while True:
+                chunk = response.read(1024 * 1024)
+                if not chunk:
+                    break
+                f.write(chunk)
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"HTTP error while downloading {url}: {exc.code} {exc.reason}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"Network error while downloading {url}: {exc.reason}") from exc
 
 
 def validate_torch_checkpoint(path: Path) -> None:
@@ -62,65 +63,45 @@ def validate_torch_checkpoint(path: Path) -> None:
     except Exception as exc:
         raise RuntimeError(
             f"Checkpoint file is invalid or incomplete: {path}\n"
-            "Google Drive may have returned a partial/quota-limited file. "
-            "Please retry later or download manually from the README links and place it in data/."
+            "Downloaded checkpoint is not loadable. "
+            "Please verify the uploaded Hugging Face file and try again."
         ) from exc
 
 
-def copy_required_file(search_root: Path, filename: str, dst: Path) -> None:
-    matches = list(search_root.rglob(filename))
-    if not matches:
-        raise FileNotFoundError(f"Could not find {filename} under {search_root}")
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(matches[0], dst)
-
-
-def maybe_download_backbone(data_dir: Path, force: bool) -> None:
+def maybe_download_backbone(data_dir: Path, force: bool, hf_repo_id: str) -> None:
     target = data_dir / "amr_vitbb.pth"
     if target.exists() and not force:
         print(f"[skip] {target} already exists")
         return
 
     print("[download] pretrained backbone")
-    with tempfile.TemporaryDirectory(prefix="prima_backbone_") as tmp:
-        tmpdir = Path(tmp)
-        run_gdown(["--fuzzy", BACKBONE_FILE_URL, "-O", str(tmpdir)])
-        files = [p for p in tmpdir.rglob("*") if p.is_file()]
-        if not files:
-            raise FileNotFoundError("Backbone download produced no file")
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(files[0], target)
+    download_file(build_hf_url(hf_repo_id, BACKBONE_ASSET_PATH), target)
     print(f"[ok] {target}")
 
 
-def maybe_download_smal(data_dir: Path, force: bool) -> None:
-    required = [
-        "my_smpl_00781_4_all.pkl",
-        "my_smpl_data_00781_4_all.pkl",
-        "walking_toy_symmetric_pose_prior_with_cov_35parts.pkl",
-    ]
+def maybe_download_smal(data_dir: Path, force: bool, hf_repo_id: str) -> None:
+    required = [Path(p).name for p in SMAL_ASSET_PATHS]
     smal_dir = data_dir / "smal"
     if smal_dir.exists() and all((smal_dir / n).exists() for n in required) and not force:
         print("[skip] SMAL files already exist")
         return
 
     print("[download] SMAL assets")
-    with tempfile.TemporaryDirectory(prefix="prima_smal_") as tmp:
-        tmpdir = Path(tmp)
-        run_gdown(["--folder", SMAL_FOLDER_URL, "-O", str(tmpdir)])
-        for filename in required:
-            copy_required_file(tmpdir, filename, smal_dir / filename)
+    for asset_path in SMAL_ASSET_PATHS:
+        filename = Path(asset_path).name
+        target = smal_dir / filename
+        download_file(build_hf_url(hf_repo_id, asset_path), target)
     print(f"[ok] {smal_dir}")
 
 
 def maybe_download_stage(
     stage_name: str,
-    config_url: str,
-    checkpoint_url: str,
+    config_asset_path: str,
+    checkpoint_asset_path: str,
     ckpt_name: str,
     data_dir: Path,
     force: bool,
-    fallback_checkpoint_url: str | None = None,
+    hf_repo_id: str,
 ) -> None:
     stage_dir = data_dir / stage_name
     cfg_target = stage_dir / ".hydra" / "config.yaml"
@@ -132,22 +113,10 @@ def maybe_download_stage(
     print(f"[download] {stage_name} assets")
     cfg_target.parent.mkdir(parents=True, exist_ok=True)
     ckpt_target.parent.mkdir(parents=True, exist_ok=True)
-    run_gdown(["--fuzzy", config_url, "-O", str(cfg_target)])
-    ok, err = try_run_gdown(["--fuzzy", checkpoint_url, "-O", str(ckpt_target)])
-    if not ok:
-        quota_error = "Too many users have viewed or downloaded this file recently" in err
-        if fallback_checkpoint_url and quota_error:
-            print(
-                f"[warn] {stage_name} primary checkpoint is quota-limited. "
-                "Trying fallback checkpoint from the same Drive folder."
-            )
-            run_gdown(["--fuzzy", fallback_checkpoint_url, "-O", str(ckpt_target)])
-        else:
-            sys.stderr.write(err + "\n")
-            raise RuntimeError(
-                "gdown failed. Install it with: pip install gdown\n"
-                f"Failed command: {sys.executable} -m gdown --fuzzy {checkpoint_url} -O {ckpt_target}"
-            )
+    if force or not cfg_target.exists():
+        download_file(build_hf_url(hf_repo_id, config_asset_path), cfg_target)
+    if force or not ckpt_target.exists():
+        download_file(build_hf_url(hf_repo_id, checkpoint_asset_path), ckpt_target)
     validate_torch_checkpoint(ckpt_target)
     print(f"[ok] {stage_dir}")
 
@@ -174,28 +143,41 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Download PRIMA demo checkpoints and data")
     parser.add_argument("--data-dir", type=Path, default=Path("data"), help="Target data directory")
     parser.add_argument("--force", action="store_true", help="Redownload and overwrite existing files")
+    parser.add_argument(
+        "--hf-repo-id",
+        type=str,
+        default=DEFAULT_HF_REPO_ID,
+        help="Hugging Face repo ID containing demo assets (e.g., org/repo)",
+    )
     args = parser.parse_args()
+    if args.hf_repo_id == DEFAULT_HF_REPO_ID:
+        raise ValueError(
+            "Please set --hf-repo-id to your uploaded asset repo, "
+            "for example: --hf-repo-id AdaptiveMotorControlLab/PRIMA-demo-assets"
+        )
 
     data_dir = args.data_dir.resolve()
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    maybe_download_smal(data_dir, force=args.force)
-    maybe_download_backbone(data_dir, force=args.force)
+    maybe_download_smal(data_dir, force=args.force, hf_repo_id=args.hf_repo_id)
+    maybe_download_backbone(data_dir, force=args.force, hf_repo_id=args.hf_repo_id)
     maybe_download_stage(
         "PRIMAS1",
-        STAGE1_CONFIG_URL,
-        STAGE1_CHECKPOINT_URL,
+        STAGE1_CONFIG_ASSET_PATH,
+        STAGE1_CHECKPOINT_ASSET_PATH,
         "s1ckpt.ckpt",
         data_dir,
         force=args.force,
+        hf_repo_id=args.hf_repo_id,
     )
     maybe_download_stage(
         "PRIMAS3",
-        STAGE3_CONFIG_URL,
-        STAGE3_CHECKPOINT_URL,
+        STAGE3_CONFIG_ASSET_PATH,
+        STAGE3_CHECKPOINT_ASSET_PATH,
         "s3ckpt.ckpt",
         data_dir,
         force=args.force,
+        hf_repo_id=args.hf_repo_id,
     )
     verify_layout(data_dir)
 
