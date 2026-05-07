@@ -363,6 +363,7 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
     return gr.Interface(
         fn=gradio_inference,
         analytics_enabled=False,
+        cache_examples=False,
         inputs=[
             gr.Image(
                 label="Input image",

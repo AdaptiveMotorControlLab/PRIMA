@@ -3,3 +3,4 @@ torch==2.2.1
 torchvision==0.17.1
 deeplabcut
 pytorch-lightning==2.5.5
+yacs==0.1.8
