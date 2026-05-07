@@ -2,3 +2,4 @@ huggingface_hub<1
 torch==2.2.1
 torchvision==0.17.1
 deeplabcut
+pytorch-lightning==2.5.5
