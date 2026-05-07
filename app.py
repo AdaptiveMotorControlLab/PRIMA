@@ -315,7 +315,7 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
         """Wrapper for Gradio. ``image`` is an RGB numpy array."""
 
         if image is None:
-            return [], [], []
+            return None, None, None
 
         if image.dtype != np.uint8:
             img_rgb = np.clip(image, 0, 255).astype(np.uint8)
@@ -328,7 +328,7 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
                 detector = _build_detector()
             except Exception as e:
                 print(f"[error] Model initialization failed: {type(e).__name__}: {e}")
-                return [], [], []
+                return None, None, None
             runtime_cache["model"] = model
             runtime_cache["model_cfg"] = model_cfg
             runtime_cache["renderer"] = renderer
@@ -351,7 +351,10 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
             save_mesh=save_mesh,
         )
 
-        return before_imgs, after_imgs, kpt_imgs
+        first_before = before_imgs[0] if before_imgs else None
+        first_after = after_imgs[0] if after_imgs else None
+        first_kpts = kpt_imgs[0] if kpt_imgs else None
+        return first_before, first_after, first_kpts
 
     return gr.Interface(
         fn=gradio_inference,
@@ -395,9 +398,9 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
             gr.Checkbox(label="Save meshes (.obj)", value=True),
         ],
         outputs=[
-            gr.Gallery(label="Before TTA (all animals)"),
-            gr.Gallery(label="After TTA (all animals)"),
-            gr.Gallery(label="PRIMA 26 keypoints"),
+            gr.Image(label="Before TTA"),
+            gr.Image(label="After TTA"),
+            gr.Image(label="PRIMA 26 keypoints"),
         ],
         title="PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation",
         description=(
