@@ -34,21 +34,6 @@ import numpy as np
 import torch
 import torch.utils.data
 
-from prima.models import load_prima
-from prima.utils import recursive_to
-from prima.datasets.vitdet_dataset import ViTDetDataset
-from prima.utils.renderer import Renderer
-
-# Reuse core utilities from the CLI demo_tta script
-from demo_tta import (
-    ANIMAL_COCO_IDS,
-    denorm_patch_to_rgb,
-    map_superanimal_to_prima,
-    run_superanimal_on_patch,
-    save_keypoint_vis,
-    tta_optimize,
-)
-
 
 # Default checkpoint path following README instructions
 DEFAULT_CHECKPOINT = "data/PRIMAS1/checkpoints/s1ckpt.ckpt"
@@ -59,6 +44,9 @@ DEFAULT_OUT_FOLDER = "demo_out_tta_gradio"
 
 def _load_prima_model(checkpoint_path: str = DEFAULT_CHECKPOINT):
     """Load PRIMA model and renderer once for the Gradio app."""
+    from prima.models import load_prima
+    from prima.utils.renderer import Renderer
+
     checkpoint = Path(checkpoint_path)
     cfg_path = checkpoint.parent.parent / ".hydra" / "config.yaml"
     if not checkpoint.exists():
@@ -135,6 +123,16 @@ def _collect_animal_results(
         first_before_mesh: path to first animal's before-TTA mesh (.obj) or None
         first_after_mesh: path to first animal's after-TTA mesh (.obj) or None
     """
+    from prima.utils import recursive_to
+    from prima.datasets.vitdet_dataset import ViTDetDataset
+    from demo_tta import (
+        ANIMAL_COCO_IDS,
+        denorm_patch_to_rgb,
+        map_superanimal_to_prima,
+        run_superanimal_on_patch,
+        save_keypoint_vis,
+        tta_optimize,
+    )
 
     # Detect animals
     img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
