@@ -96,6 +96,7 @@ def _build_detector():
         "https://dl.fbaipublicfiles.com/detectron2/COCO-Detection/"
         "faster_rcnn_X_101_32x8d_FPN_3x/139173657/model_final_68b088.pkl"
     )
+    cfg.MODEL.DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     detector = detectron2.engine.DefaultPredictor(cfg)
     return detector
 

@@ -42,5 +42,13 @@ def load_prima(checkpoint_path):
         model_cfg.MODEL.BACKBONE.pop('PRETRAINED_WEIGHTS')
         model_cfg.freeze()
 
-    model = PRIMA.load_from_checkpoint(checkpoint_path, strict=False, cfg=model_cfg, map_location='cpu')
+    # Offscreen training renderer is not needed for demo/inference startup and
+    # can fail on some local OpenGL backends.
+    model = PRIMA.load_from_checkpoint(
+        checkpoint_path,
+        strict=False,
+        cfg=model_cfg,
+        map_location='cpu',
+        init_renderer=False,
+    )
     return model, model_cfg

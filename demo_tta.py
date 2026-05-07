@@ -146,24 +146,34 @@ def render_and_save(renderer, out, batch, img_fn, animal_id, out_folder, suffix,
     )
     input_patch = denorm_patch_to_rgb(batch['img'][0])
 
-    regression_img = renderer(
-        out['pred_vertices'][0].detach().cpu().numpy(),
-        out['pred_cam_t'][0].detach().cpu().numpy(),
-        batch['img'][0],
-        mesh_base_color=GREEN,
-        scene_bg_color=(1, 1, 1),
-    )
+    regression_img = None
+    try:
+        regression_img = renderer(
+            out['pred_vertices'][0].detach().cpu().numpy(),
+            out['pred_cam_t'][0].detach().cpu().numpy(),
+            batch['img'][0],
+            mesh_base_color=GREEN,
+            scene_bg_color=(1, 1, 1),
+        )
+    except Exception as e:
+        # Headless macOS sessions may lack a display backend for pyrender.
+        # Keep inference/mesh export working by falling back to patch-only output.
+        print(f"[render_and_save] Rendering skipped ({type(e).__name__}: {e})")
+        regression_img = input_patch.copy()
 
     final_img = np.concatenate([input_patch, regression_img], axis=1)
     if side_view:
-        side_img = renderer(
-            out['pred_vertices'][0].detach().cpu().numpy(),
-            out['pred_cam_t'][0].detach().cpu().numpy(),
-            white_img,
-            mesh_base_color=GREEN,
-            scene_bg_color=(1, 1, 1),
-            side_view=True,
-        )
+        try:
+            side_img = renderer(
+                out['pred_vertices'][0].detach().cpu().numpy(),
+                out['pred_cam_t'][0].detach().cpu().numpy(),
+                white_img,
+                mesh_base_color=GREEN,
+                scene_bg_color=(1, 1, 1),
+                side_view=True,
+            )
+        except Exception:
+            side_img = input_patch.copy()
         final_img = np.concatenate([final_img, side_img], axis=1)
 
     cv2.imwrite(

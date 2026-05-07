@@ -58,6 +58,16 @@ Use the helper script to download and place all demo assets automatically in `da
 python scripts/setup_demo_data.py --hf-repo-id MLAdaptiveIntelligence/PRIMA
 ```
 
+Approximate download volume from Hugging Face is ~24 GB total
+(`s1ckpt.ckpt` ~10.2 GB + `s3ckpt.ckpt` ~10.2 GB + `amr_vitbb.pth` ~2.5 GB + SMAL files).
+Expected time is roughly:
+- 100 Mbps: ~35-45 minutes
+- 300 Mbps: ~12-18 minutes
+- 1 Gbps: ~4-8 minutes
+
+To avoid re-downloading completed assets, rerun without `--force`. The script now
+re-downloads only missing or invalid checkpoints.
+
 Expected files in that Hugging Face repo root:
 - `my_smpl_00781_4_all.pkl`
 - `my_smpl_data_00781_4_all.pkl`

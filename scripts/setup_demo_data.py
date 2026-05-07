@@ -106,7 +106,14 @@ def maybe_download_stage(
     stage_dir = data_dir / stage_name
     cfg_target = stage_dir / ".hydra" / "config.yaml"
     ckpt_target = stage_dir / "checkpoints" / ckpt_name
+    existing_ckpt_valid = False
     if cfg_target.exists() and ckpt_target.exists() and not force:
+        try:
+            validate_torch_checkpoint(ckpt_target)
+            existing_ckpt_valid = True
+        except RuntimeError:
+            print(f"[warn] {stage_name} checkpoint is incomplete, redownloading checkpoint only.")
+    if cfg_target.exists() and existing_ckpt_valid and not force:
         print(f"[skip] {stage_name} assets already exist")
         return
 
@@ -115,7 +122,7 @@ def maybe_download_stage(
     ckpt_target.parent.mkdir(parents=True, exist_ok=True)
     if force or not cfg_target.exists():
         download_file(build_hf_url(hf_repo_id, config_asset_path), cfg_target)
-    if force or not ckpt_target.exists():
+    if force or not ckpt_target.exists() or not existing_ckpt_valid:
         download_file(build_hf_url(hf_repo_id, checkpoint_asset_path), ckpt_target)
     validate_torch_checkpoint(ckpt_target)
     print(f"[ok] {stage_dir}")

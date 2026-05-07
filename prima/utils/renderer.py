@@ -11,9 +11,9 @@ Licensed under a modified MIT license
 
 import os
 
-if 'PYOPENGL_PLATFORM' not in os.environ:
-    # EGL is usually unavailable on macOS; use pyglet there.
-    os.environ['PYOPENGL_PLATFORM'] = 'pyglet' if os.uname().sysname == 'Darwin' else 'egl'
+if 'PYOPENGL_PLATFORM' not in os.environ and os.uname().sysname != 'Darwin':
+    # Let pyrender pick the native macOS backend; force EGL elsewhere.
+    os.environ['PYOPENGL_PLATFORM'] = 'egl'
 import torch
 import numpy as np
 import pyrender
