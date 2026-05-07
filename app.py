@@ -327,8 +327,7 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
                 model, model_cfg, renderer, device = _load_prima_model(checkpoint_path)
                 detector = _build_detector()
             except Exception as e:
-                print(f"[error] Model initialization failed: {type(e).__name__}: {e}")
-                return None, None, None
+                raise gr.Error(f"Model initialization failed: {type(e).__name__}: {e}")
             runtime_cache["model"] = model
             runtime_cache["model_cfg"] = model_cfg
             runtime_cache["renderer"] = renderer
@@ -354,6 +353,11 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
         first_before = before_imgs[0] if before_imgs else None
         first_after = after_imgs[0] if after_imgs else None
         first_kpts = kpt_imgs[0] if kpt_imgs else None
+        if first_before is None and first_after is None:
+            raise gr.Error(
+                "No output generated. Check logs for missing checkpoints/dependencies, "
+                "or try an image with a clearly visible quadruped."
+            )
         return first_before, first_after, first_kpts
 
     return gr.Interface(
