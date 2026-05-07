@@ -34,11 +34,6 @@ import numpy as np
 import torch
 import torch.utils.data
 
-import detectron2
-import detectron2.config
-import detectron2.engine
-from detectron2 import model_zoo
-
 from prima.models import load_prima
 from prima.utils import recursive_to
 from prima.datasets.vitdet_dataset import ViTDetDataset
@@ -86,6 +81,13 @@ def _load_prima_model(checkpoint_path: str = DEFAULT_CHECKPOINT):
 
 def _build_detector():
     """Build Detectron2 animal detector (same config as demo_tta/demo.py)."""
+    try:
+        import detectron2.config
+        import detectron2.engine
+        from detectron2 import model_zoo
+    except Exception as e:
+        print(f"[warn] Detectron2 unavailable ({type(e).__name__}: {e}); using full-image fallback bbox.")
+        return None
 
     cfg = detectron2.config.get_cfg()
     cfg.merge_from_file(
@@ -136,18 +138,23 @@ def _collect_animal_results(
 
     # Detect animals
     img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
-    det_out = detector(img_bgr)
-    det_instances = det_out["instances"]
+    if detector is None:
+        # Fallback for environments where Detectron2 is unavailable: process full image as one crop.
+        h, w = img_bgr.shape[:2]
+        boxes = np.array([[0.0, 0.0, float(max(1, w - 1)), float(max(1, h - 1))]], dtype=np.float32)
+    else:
+        det_out = detector(img_bgr)
+        det_instances = det_out["instances"]
 
-    valid_idx = [
-        i
-        for i, (c, s) in enumerate(zip(det_instances.pred_classes, det_instances.scores))
-        if (int(c) in ANIMAL_COCO_IDS) and (float(s) > float(det_thresh))
-    ]
-    if len(valid_idx) == 0:
-        return [], [], [], None, None
+        valid_idx = [
+            i
+            for i, (c, s) in enumerate(zip(det_instances.pred_classes, det_instances.scores))
+            if (int(c) in ANIMAL_COCO_IDS) and (float(s) > float(det_thresh))
+        ]
+        if len(valid_idx) == 0:
+            return [], [], [], None, None
 
-    boxes = det_instances.pred_boxes.tensor[valid_idx].cpu().numpy()
+        boxes = det_instances.pred_boxes.tensor[valid_idx].cpu().numpy()
 
     dataset = ViTDetDataset(model_cfg, img_bgr, boxes)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
