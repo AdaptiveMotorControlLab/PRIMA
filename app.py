@@ -23,7 +23,9 @@ Gradio interface. The overall logic follows:
 
 import argparse
 import os
+import sys
 import tempfile
+import traceback
 from types import SimpleNamespace
 from typing import List, Tuple
 from pathlib import Path
@@ -34,12 +36,44 @@ import numpy as np
 import torch
 import torch.utils.data
 
+# Repo-local minimal ``chumpy`` shim (see ``chumpy/__init__.py``) so SMAL pickles load
+# without installing the full chumpy package in Space builds.
+_REPO_ROOT = Path(__file__).resolve().parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 
 # Default checkpoint path following README instructions
 DEFAULT_CHECKPOINT = "data/PRIMAS1/checkpoints/s1ckpt.ckpt"
+DEFAULT_HF_ASSET_REPO = "MLAdaptiveIntelligence/PRIMA"
 
 # Output folder for rendered images/meshes and keypoints
 DEFAULT_OUT_FOLDER = "demo_out_tta_gradio"
+
+
+def _ensure_demo_assets(checkpoint_path: str) -> None:
+    """Download required demo assets when running in a clean environment."""
+    from scripts.setup_demo_data import (
+        maybe_download_smal,
+        maybe_download_backbone,
+        maybe_download_stage,
+    )
+
+    checkpoint = Path(checkpoint_path)
+    data_dir = checkpoint.parents[2]
+    hf_repo_id = os.environ.get("PRIMA_HF_REPO_ID", DEFAULT_HF_ASSET_REPO)
+
+    maybe_download_smal(data_dir, force=False, hf_repo_id=hf_repo_id)
+    maybe_download_backbone(data_dir, force=False, hf_repo_id=hf_repo_id)
+    maybe_download_stage(
+        "PRIMAS1",
+        "config_s1_HYDRA.yaml",
+        "s1ckpt.ckpt",
+        "s1ckpt.ckpt",
+        data_dir,
+        force=False,
+        hf_repo_id=hf_repo_id,
+    )
 
 
 def _load_prima_model(checkpoint_path: str = DEFAULT_CHECKPOINT):
@@ -49,6 +83,8 @@ def _load_prima_model(checkpoint_path: str = DEFAULT_CHECKPOINT):
 
     checkpoint = Path(checkpoint_path)
     cfg_path = checkpoint.parent.parent / ".hydra" / "config.yaml"
+    if not checkpoint.exists() or not cfg_path.exists():
+        _ensure_demo_assets(checkpoint_path)
     if not checkpoint.exists():
         raise FileNotFoundError(
             f"Missing checkpoint: {checkpoint}. Download demo checkpoints/data as described in README."
@@ -312,53 +348,77 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
         side_view: bool,
         save_mesh: bool,
     ):
-        """Wrapper for Gradio. ``image`` is an RGB numpy array."""
+        """Wrapper for Gradio. ``image`` is an RGB numpy array.
+
+        Yields intermediate status so long first-run (Hub downloads + model load)
+        does not hit silent client/proxy timeouts.
+        """
 
         if image is None:
-            return None, None, None
+            yield None, None, None, "No image provided."
+            return
 
         if image.dtype != np.uint8:
             img_rgb = np.clip(image, 0, 255).astype(np.uint8)
         else:
             img_rgb = image
 
+        yield None, None, None, "Queued; preparing run…"
+
         if runtime_cache["model"] is None:
+            yield (
+                None,
+                None,
+                None,
+                "First run: downloading demo assets from Hugging Face (large checkpoint) "
+                "and loading the model. This can take many minutes; status updates here "
+                "mean the session is still alive.",
+            )
             try:
                 model, model_cfg, renderer, device = _load_prima_model(checkpoint_path)
                 detector = _build_detector()
-            except Exception as e:
-                raise gr.Error(f"Model initialization failed: {type(e).__name__}: {e}")
+            except Exception:
+                yield None, None, None, f"Model initialization failed:\n{traceback.format_exc()}"
+                return
             runtime_cache["model"] = model
             runtime_cache["model_cfg"] = model_cfg
             runtime_cache["renderer"] = renderer
             runtime_cache["device"] = device
             runtime_cache["detector"] = detector
+            yield None, None, None, "Model loaded. Running detection and inference…"
 
-        before_imgs, after_imgs, kpt_imgs, mesh_before, mesh_after = _collect_animal_results(
-            runtime_cache["model"],
-            runtime_cache["model_cfg"],
-            runtime_cache["renderer"],
-            runtime_cache["device"],
-            runtime_cache["detector"],
-            out_folder,
-            img_rgb,
-            tta_lr=tta_lr,
-            tta_num_iters=tta_num_iters,
-            det_thresh=det_thresh,
-            kp_conf_thresh=kp_conf_thresh,
-            side_view=side_view,
-            save_mesh=save_mesh,
-        )
+        try:
+            before_imgs, after_imgs, kpt_imgs, mesh_before, mesh_after = _collect_animal_results(
+                runtime_cache["model"],
+                runtime_cache["model_cfg"],
+                runtime_cache["renderer"],
+                runtime_cache["device"],
+                runtime_cache["detector"],
+                out_folder,
+                img_rgb,
+                tta_lr=tta_lr,
+                tta_num_iters=tta_num_iters,
+                det_thresh=det_thresh,
+                kp_conf_thresh=kp_conf_thresh,
+                side_view=side_view,
+                save_mesh=save_mesh,
+            )
+        except Exception:
+            yield None, None, None, f"Inference failed:\n{traceback.format_exc()}"
+            return
 
         first_before = before_imgs[0] if before_imgs else None
         first_after = after_imgs[0] if after_imgs else None
         first_kpts = kpt_imgs[0] if kpt_imgs else None
         if first_before is None and first_after is None:
-            raise gr.Error(
-                "No output generated. Check logs for missing checkpoints/dependencies, "
-                "or try an image with a clearly visible quadruped."
+            yield (
+                None,
+                None,
+                None,
+                "No output generated. Try an image with a clearly visible quadruped.",
             )
-        return first_before, first_after, first_kpts
+            return
+        yield first_before, first_after, first_kpts, "OK"
 
     return gr.Interface(
         fn=gradio_inference,
@@ -406,6 +466,7 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
             gr.Image(label="Before TTA"),
             gr.Image(label="After TTA"),
             gr.Image(label="PRIMA 26 keypoints"),
+            gr.Textbox(label="Status / Traceback", lines=12),
         ],
         title="PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation",
         description=(

@@ -10,8 +10,8 @@ Licensed under a modified MIT license
 import os
 
 if 'PYOPENGL_PLATFORM' not in os.environ and os.uname().sysname != 'Darwin':
-    # Let pyrender pick the native macOS backend; force EGL elsewhere.
-    os.environ['PYOPENGL_PLATFORM'] = 'egl'
+    # Use software OpenGL in headless Linux environments (e.g., Hugging Face Spaces).
+    os.environ['PYOPENGL_PLATFORM'] = 'osmesa'
 import torch
 from torchvision.utils import make_grid
 import numpy as np

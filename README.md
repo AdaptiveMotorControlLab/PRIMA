@@ -1,3 +1,14 @@
+---
+title: PRIMA Demo
+emoji: 🦮
+colorFrom: blue
+colorTo: green
+sdk: gradio
+python_version: "3.10"
+app_file: app.py
+startup_duration_timeout: 60m
+---
+
 # PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation
 
 

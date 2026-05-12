@@ -15,15 +15,14 @@ Licensed under a modified MIT license
 from __future__ import annotations
 
 import argparse
-import urllib.error
-import urllib.request
+import shutil
 import sys
 from pathlib import Path
 
 import torch
 
-DEFAULT_HF_REPO_ID = "YOUR_ORG_OR_USER/PRIMA-demo-assets"
-HF_RESOLVE_URL = "https://huggingface.co/{repo_id}/resolve/main/{asset_path}?download=1"
+DEFAULT_HF_REPO_ID = "MLAdaptiveIntelligence/PRIMA"
+
 
 SMAL_ASSET_PATHS = [
     "my_smpl_00781_4_all.pkl",
@@ -37,24 +36,23 @@ STAGE3_CONFIG_ASSET_PATH = "config_s3_HYDRA.yaml"
 STAGE3_CHECKPOINT_ASSET_PATH = "s3ckpt.ckpt"
 
 
-def build_hf_url(repo_id: str, asset_path: str) -> str:
-    return HF_RESOLVE_URL.format(repo_id=repo_id, asset_path=asset_path)
+def download_from_hub(hf_repo_id: str, remote_filename: str, dest: Path) -> None:
+    """Download ``remote_filename`` from the Hub repo to exact path ``dest`` (resumable, uses HF cache)."""
+    from huggingface_hub import hf_hub_download
 
-
-def download_file(url: str, target: Path) -> None:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    request = urllib.request.Request(url, headers={"User-Agent": "prima-setup-demo-data/1.0"})
-    try:
-        with urllib.request.urlopen(request) as response, target.open("wb") as f:
-            while True:
-                chunk = response.read(1024 * 1024)
-                if not chunk:
-                    break
-                f.write(chunk)
-    except urllib.error.HTTPError as exc:
-        raise RuntimeError(f"HTTP error while downloading {url}: {exc.code} {exc.reason}") from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"Network error while downloading {url}: {exc.reason}") from exc
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    got = hf_hub_download(
+        repo_id=hf_repo_id,
+        filename=remote_filename,
+        local_dir=str(dest.parent),
+        local_dir_use_symlinks=False,
+    )
+    got_path = Path(got).resolve()
+    target = dest.resolve()
+    if got_path != target:
+        if target.exists():
+            target.unlink()
+        shutil.move(str(got_path), str(target))
 
 
 def validate_torch_checkpoint(path: Path) -> None:
@@ -75,7 +73,7 @@ def maybe_download_backbone(data_dir: Path, force: bool, hf_repo_id: str) -> Non
         return
 
     print("[download] pretrained backbone")
-    download_file(build_hf_url(hf_repo_id, BACKBONE_ASSET_PATH), target)
+    download_from_hub(hf_repo_id, BACKBONE_ASSET_PATH, target)
     print(f"[ok] {target}")
 
 
@@ -90,7 +88,7 @@ def maybe_download_smal(data_dir: Path, force: bool, hf_repo_id: str) -> None:
     for asset_path in SMAL_ASSET_PATHS:
         filename = Path(asset_path).name
         target = smal_dir / filename
-        download_file(build_hf_url(hf_repo_id, asset_path), target)
+        download_from_hub(hf_repo_id, asset_path, target)
     print(f"[ok] {smal_dir}")
 
 
@@ -121,9 +119,9 @@ def maybe_download_stage(
     cfg_target.parent.mkdir(parents=True, exist_ok=True)
     ckpt_target.parent.mkdir(parents=True, exist_ok=True)
     if force or not cfg_target.exists():
-        download_file(build_hf_url(hf_repo_id, config_asset_path), cfg_target)
+        download_from_hub(hf_repo_id, config_asset_path, cfg_target)
     if force or not ckpt_target.exists() or not existing_ckpt_valid:
-        download_file(build_hf_url(hf_repo_id, checkpoint_asset_path), ckpt_target)
+        download_from_hub(hf_repo_id, checkpoint_asset_path, ckpt_target)
     validate_torch_checkpoint(ckpt_target)
     print(f"[ok] {stage_dir}")
 
@@ -157,12 +155,6 @@ def main() -> int:
         help="Hugging Face repo ID containing demo assets (e.g., org/repo)",
     )
     args = parser.parse_args()
-    if args.hf_repo_id == DEFAULT_HF_REPO_ID:
-        raise ValueError(
-            "Please set --hf-repo-id to your uploaded asset repo, "
-            "for example: --hf-repo-id AdaptiveMotorControlLab/PRIMA-demo-assets"
-        )
-
     data_dir = args.data_dir.resolve()
     data_dir.mkdir(parents=True, exist_ok=True)
 
