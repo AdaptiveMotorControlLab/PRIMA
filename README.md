@@ -17,7 +17,7 @@ This is the official implementation of the approach described in the preprint:
 PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation \
 Xiaohang Yu, Ti Wang, Mackenzie Weygandt Mathis
 
-Teaser figure: see `images/teaser.png` in the GitHub repository.
+![PRIMA teaser](images/teaser.png)
 
 
 ---
@@ -136,6 +136,27 @@ python app.py \
 
 This starts a local Gradio app (by default on http://127.0.0.1:7860), where
 you can upload images and visualize PRIMA predictions and adaptation results.
+
+#### Hugging Face Space (maintainers)
+
+Demo images under `demo_data/` and `images/teaser.png` are tracked with **Git LFS**
+(see `.gitattributes`) so they can be pushed to a Hugging Face Space under the Hub’s
+LFS / **Xet** bridge. Install tooling once:
+
+```bash
+brew install git-lfs git-xet
+git xet install
+git lfs install
+```
+
+Then from a clean checkout with LFS files present, deploy the Space repo:
+
+```bash
+./scripts/deploy_hf_space.sh
+```
+
+The script rsyncs the working tree (not `git archive`) so image files are materialized
+before `git add` turns them into LFS blobs.
 
 ---
 
