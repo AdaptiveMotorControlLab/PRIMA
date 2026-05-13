@@ -62,12 +62,9 @@ def _running_on_space() -> bool:
 def _gradio_examples_for_interface() -> List[List]:
     """Gradio prefetches example media at startup.
 
-    Hugging Face Spaces omit demo PNG/JPG from git (binary push policy), and URL-based
-    examples can 404 depending on host / redirects. Use absolute paths only when files
-    exist beside ``app.py``; on Spaces return an empty list so no ``examples=`` is set.
+    Demo images are tracked with Git LFS / Xet (see ``.gitattributes``) so they can live
+    in the Hugging Face Space repo. Use absolute paths only when files exist beside ``app.py``.
     """
-    if _running_on_space():
-        return []
     if _is_truthy_env("PRIMA_DISABLE_GRADIO_EXAMPLES"):
         return []
     rows: List[List] = []
