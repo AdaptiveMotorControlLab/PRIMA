@@ -43,11 +43,6 @@ import torch.nn.functional as F
 import torch.utils.data
 from tqdm import tqdm
 
-import detectron2
-import detectron2.config
-import detectron2.engine
-from detectron2 import model_zoo
-
 from prima.models import load_prima
 from prima.utils import recursive_to
 from prima.datasets.vitdet_dataset import ViTDetDataset, DEFAULT_MEAN, DEFAULT_STD
@@ -239,6 +234,10 @@ def main():
 
     renderer = Renderer(model_cfg, faces=model.smal.faces)
     os.makedirs(args.out_folder, exist_ok=True)
+
+    import detectron2.config
+    import detectron2.engine
+    from detectron2 import model_zoo
 
     cfg = detectron2.config.get_cfg()
     cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml"))

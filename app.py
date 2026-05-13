@@ -23,9 +23,12 @@ Gradio interface. The overall logic follows:
 
 import argparse
 import os
+import sys
 import tempfile
+import traceback
 from types import SimpleNamespace
 from typing import List, Tuple
+from pathlib import Path
 
 import cv2
 import gradio as gr
@@ -33,36 +36,90 @@ import numpy as np
 import torch
 import torch.utils.data
 
-import detectron2
-import detectron2.config
-import detectron2.engine
-from detectron2 import model_zoo
-
-from prima.models import load_prima
-from prima.utils import recursive_to
-from prima.datasets.vitdet_dataset import ViTDetDataset
-from prima.utils.renderer import Renderer
-
-# Reuse core utilities from the CLI demo_tta script
-from demo_tta import (
-    ANIMAL_COCO_IDS,
-    denorm_patch_to_rgb,
-    map_superanimal_to_prima,
-    run_superanimal_on_patch,
-    save_keypoint_vis,
-    tta_optimize,
-)
+# Repo-local minimal ``chumpy`` shim (see ``chumpy/__init__.py``) so SMAL pickles load
+# without installing the full chumpy package in Space builds.
+_REPO_ROOT = Path(__file__).resolve().parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 
 # Default checkpoint path following README instructions
 DEFAULT_CHECKPOINT = "data/PRIMAS1/checkpoints/s1ckpt.ckpt"
+DEFAULT_HF_ASSET_REPO = "MLAdaptiveIntelligence/PRIMA"
 
 # Output folder for rendered images/meshes and keypoints
 DEFAULT_OUT_FOLDER = "demo_out_tta_gradio"
 
 
+def _is_truthy_env(var_name: str) -> bool:
+    return os.environ.get(var_name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _running_on_space() -> bool:
+    return bool(os.environ.get("SPACE_ID") or os.environ.get("HF_SPACE_ID"))
+
+
+def _should_preload_assets() -> bool:
+    """Default to preload on Spaces; configurable via PRIMA_PRELOAD_ASSETS."""
+    preload_env = os.environ.get("PRIMA_PRELOAD_ASSETS")
+    if preload_env is not None:
+        return _is_truthy_env("PRIMA_PRELOAD_ASSETS")
+    return _running_on_space()
+
+
+def _ensure_demo_assets(checkpoint_path: str) -> None:
+    """Download required demo assets when running in a clean environment."""
+    from scripts.setup_demo_data import (
+        maybe_download_smal,
+        maybe_download_backbone,
+        maybe_download_stage,
+    )
+
+    checkpoint = Path(checkpoint_path)
+    data_dir = checkpoint.parents[2]
+    hf_repo_id = os.environ.get("PRIMA_HF_REPO_ID", DEFAULT_HF_ASSET_REPO)
+
+    maybe_download_smal(data_dir, force=False, hf_repo_id=hf_repo_id)
+    maybe_download_backbone(data_dir, force=False, hf_repo_id=hf_repo_id)
+    maybe_download_stage(
+        "PRIMAS1",
+        "config_s1_HYDRA.yaml",
+        "s1ckpt.ckpt",
+        "s1ckpt.ckpt",
+        data_dir,
+        force=False,
+        hf_repo_id=hf_repo_id,
+    )
+
+
+def _preload_assets_once(checkpoint_path: str) -> None:
+    checkpoint = Path(checkpoint_path)
+    cfg_path = checkpoint.parent.parent / ".hydra" / "config.yaml"
+    if checkpoint.exists() and cfg_path.exists():
+        print("[startup] Assets already present; skipping preload.")
+        return
+    print("[startup] Preloading demo assets from Hugging Face Hub...")
+    _ensure_demo_assets(checkpoint_path)
+    print("[startup] Asset preload complete.")
+
+
 def _load_prima_model(checkpoint_path: str = DEFAULT_CHECKPOINT):
     """Load PRIMA model and renderer once for the Gradio app."""
+    from prima.models import load_prima
+    from prima.utils.renderer import Renderer
+
+    checkpoint = Path(checkpoint_path)
+    cfg_path = checkpoint.parent.parent / ".hydra" / "config.yaml"
+    if not checkpoint.exists() or not cfg_path.exists():
+        _ensure_demo_assets(checkpoint_path)
+    if not checkpoint.exists():
+        raise FileNotFoundError(
+            f"Missing checkpoint: {checkpoint}. Download demo checkpoints/data as described in README."
+        )
+    if not cfg_path.exists():
+        raise FileNotFoundError(
+            f"Missing model config: {cfg_path}. Ensure the full checkpoint folder layout from README is present."
+        )
 
     model, model_cfg = load_prima(checkpoint_path)
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -75,6 +132,13 @@ def _load_prima_model(checkpoint_path: str = DEFAULT_CHECKPOINT):
 
 def _build_detector():
     """Build Detectron2 animal detector (same config as demo_tta/demo.py)."""
+    try:
+        import detectron2.config
+        import detectron2.engine
+        from detectron2 import model_zoo
+    except Exception as e:
+        print(f"[warn] Detectron2 unavailable ({type(e).__name__}: {e}); using full-image fallback bbox.")
+        return None
 
     cfg = detectron2.config.get_cfg()
     cfg.merge_from_file(
@@ -85,6 +149,7 @@ def _build_detector():
         "https://dl.fbaipublicfiles.com/detectron2/COCO-Detection/"
         "faster_rcnn_X_101_32x8d_FPN_3x/139173657/model_final_68b088.pkl"
     )
+    cfg.MODEL.DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     detector = detectron2.engine.DefaultPredictor(cfg)
     return detector
 
@@ -121,21 +186,36 @@ def _collect_animal_results(
         first_before_mesh: path to first animal's before-TTA mesh (.obj) or None
         first_after_mesh: path to first animal's after-TTA mesh (.obj) or None
     """
+    from prima.utils import recursive_to
+    from prima.datasets.vitdet_dataset import ViTDetDataset
+    from demo_tta import (
+        ANIMAL_COCO_IDS,
+        denorm_patch_to_rgb,
+        map_superanimal_to_prima,
+        run_superanimal_on_patch,
+        save_keypoint_vis,
+        tta_optimize,
+    )
 
     # Detect animals
     img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
-    det_out = detector(img_bgr)
-    det_instances = det_out["instances"]
+    if detector is None:
+        # Fallback for environments where Detectron2 is unavailable: process full image as one crop.
+        h, w = img_bgr.shape[:2]
+        boxes = np.array([[0.0, 0.0, float(max(1, w - 1)), float(max(1, h - 1))]], dtype=np.float32)
+    else:
+        det_out = detector(img_bgr)
+        det_instances = det_out["instances"]
 
-    valid_idx = [
-        i
-        for i, (c, s) in enumerate(zip(det_instances.pred_classes, det_instances.scores))
-        if (int(c) in ANIMAL_COCO_IDS) and (float(s) > float(det_thresh))
-    ]
-    if len(valid_idx) == 0:
-        return [], [], [], None, None
+        valid_idx = [
+            i
+            for i, (c, s) in enumerate(zip(det_instances.pred_classes, det_instances.scores))
+            if (int(c) in ANIMAL_COCO_IDS) and (float(s) > float(det_thresh))
+        ]
+        if len(valid_idx) == 0:
+            return [], [], [], None, None
 
-    boxes = det_instances.pred_boxes.tensor[valid_idx].cpu().numpy()
+        boxes = det_instances.pred_boxes.tensor[valid_idx].cpu().numpy()
 
     dataset = ViTDetDataset(model_cfg, img_bgr, boxes)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
@@ -278,8 +358,13 @@ def _collect_animal_results(
 
 def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFAULT_OUT_FOLDER) -> gr.Interface:
     os.makedirs(out_folder, exist_ok=True)
-    model, model_cfg, renderer, device = _load_prima_model(checkpoint_path)
-    detector = _build_detector()
+    runtime_cache = {
+        "model": None,
+        "model_cfg": None,
+        "renderer": None,
+        "device": None,
+        "detector": None,
+    }
 
     def gradio_inference(
         image: np.ndarray,
@@ -290,37 +375,82 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
         side_view: bool,
         save_mesh: bool,
     ):
-        """Wrapper for Gradio. ``image`` is an RGB numpy array."""
+        """Wrapper for Gradio. ``image`` is an RGB numpy array.
+
+        Yields intermediate status so long first-run (Hub downloads + model load)
+        does not hit silent client/proxy timeouts.
+        """
 
         if image is None:
-            return [], [], [], None, None
+            yield None, None, None, "No image provided."
+            return
 
         if image.dtype != np.uint8:
             img_rgb = np.clip(image, 0, 255).astype(np.uint8)
         else:
             img_rgb = image
 
-        before_imgs, after_imgs, kpt_imgs, mesh_before, mesh_after = _collect_animal_results(
-            model,
-            model_cfg,
-            renderer,
-            device,
-            detector,
-            out_folder,
-            img_rgb,
-            tta_lr=tta_lr,
-            tta_num_iters=tta_num_iters,
-            det_thresh=det_thresh,
-            kp_conf_thresh=kp_conf_thresh,
-            side_view=side_view,
-            save_mesh=save_mesh,
-        )
+        yield None, None, None, "Queued; preparing run…"
 
-        return before_imgs, after_imgs, kpt_imgs, mesh_before, mesh_after
+        if runtime_cache["model"] is None:
+            yield (
+                None,
+                None,
+                None,
+                "First run: downloading demo assets from Hugging Face (large checkpoint) "
+                "and loading the model. This can take many minutes; status updates here "
+                "mean the session is still alive.",
+            )
+            try:
+                model, model_cfg, renderer, device = _load_prima_model(checkpoint_path)
+                detector = _build_detector()
+            except Exception:
+                yield None, None, None, f"Model initialization failed:\n{traceback.format_exc()}"
+                return
+            runtime_cache["model"] = model
+            runtime_cache["model_cfg"] = model_cfg
+            runtime_cache["renderer"] = renderer
+            runtime_cache["device"] = device
+            runtime_cache["detector"] = detector
+            yield None, None, None, "Model loaded. Running detection and inference…"
 
-    return gr.Interface(
+        try:
+            before_imgs, after_imgs, kpt_imgs, mesh_before, mesh_after = _collect_animal_results(
+                runtime_cache["model"],
+                runtime_cache["model_cfg"],
+                runtime_cache["renderer"],
+                runtime_cache["device"],
+                runtime_cache["detector"],
+                out_folder,
+                img_rgb,
+                tta_lr=tta_lr,
+                tta_num_iters=tta_num_iters,
+                det_thresh=det_thresh,
+                kp_conf_thresh=kp_conf_thresh,
+                side_view=side_view,
+                save_mesh=save_mesh,
+            )
+        except Exception:
+            yield None, None, None, f"Inference failed:\n{traceback.format_exc()}"
+            return
+
+        first_before = before_imgs[0] if before_imgs else None
+        first_after = after_imgs[0] if after_imgs else None
+        first_kpts = kpt_imgs[0] if kpt_imgs else None
+        if first_before is None and first_after is None:
+            yield (
+                None,
+                None,
+                None,
+                "No output generated. Try an image with a clearly visible quadruped.",
+            )
+            return
+        yield first_before, first_after, first_kpts, "OK"
+
+    demo = gr.Interface(
         fn=gradio_inference,
         analytics_enabled=False,
+        cache_examples=False,
         inputs=[
             gr.Image(
                 label="Input image",
@@ -360,11 +490,10 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
             gr.Checkbox(label="Save meshes (.obj)", value=True),
         ],
         outputs=[
-            gr.Gallery(label="Before TTA (all animals)"),
-            gr.Gallery(label="After TTA (all animals)"),
-            gr.Gallery(label="PRIMA 26 keypoints"),
-            gr.Model3D(label="First animal mesh before TTA"),
-            gr.Model3D(label="First animal mesh after TTA"),
+            gr.Image(label="Before TTA"),
+            gr.Image(label="After TTA"),
+            gr.Image(label="PRIMA 26 keypoints"),
+            gr.Textbox(label="Status / Traceback", lines=12),
         ],
         title="PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation",
         description=(
@@ -423,6 +552,8 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
             ],
         ],
     )
+    demo.queue(max_size=8, default_concurrency_limit=1)
+    return demo
 
 
 def parse_args() -> argparse.Namespace:
@@ -444,5 +575,7 @@ def parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = parse_args()
+    if _should_preload_assets():
+        _preload_assets_once(args.checkpoint)
     demo = build_demo(checkpoint_path=args.checkpoint, out_folder=args.out_folder)
     demo.launch()

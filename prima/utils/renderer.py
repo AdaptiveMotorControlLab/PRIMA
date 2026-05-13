@@ -11,8 +11,9 @@ Licensed under a modified MIT license
 
 import os
 
-if 'PYOPENGL_PLATFORM' not in os.environ:
-    os.environ['PYOPENGL_PLATFORM'] = 'egl'
+if 'PYOPENGL_PLATFORM' not in os.environ and os.uname().sysname != 'Darwin':
+    # Use software OpenGL in headless Linux environments (e.g., Hugging Face Spaces).
+    os.environ['PYOPENGL_PLATFORM'] = 'osmesa'
 import torch
 import numpy as np
 import pyrender

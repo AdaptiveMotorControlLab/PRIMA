@@ -11,10 +11,42 @@ import torch
 import torch.nn as nn
 import numpy as np
 import pickle
-from pytorch3d.transforms import matrix_to_axis_angle
 import torch.nn.functional as F
 from ..utils.geometry import aa_to_rotmat
 from typing import Dict
+
+
+def matrix_to_axis_angle(rot_mats: torch.Tensor) -> torch.Tensor:
+    """Convert rotation matrices (..., 3, 3) to axis-angle vectors (..., 3).
+
+    This local implementation avoids a hard runtime dependency on PyTorch3D.
+    """
+    if rot_mats.shape[-2:] != (3, 3):
+        raise ValueError(f"Expected (..., 3, 3) rotation matrices, got {rot_mats.shape}")
+
+    trace = rot_mats[..., 0, 0] + rot_mats[..., 1, 1] + rot_mats[..., 2, 2]
+    cos_theta = (trace - 1.0) * 0.5
+    cos_theta = torch.clamp(cos_theta, -1.0, 1.0)
+    theta = torch.acos(cos_theta)
+
+    vee = torch.stack(
+        [
+            rot_mats[..., 2, 1] - rot_mats[..., 1, 2],
+            rot_mats[..., 0, 2] - rot_mats[..., 2, 0],
+            rot_mats[..., 1, 0] - rot_mats[..., 0, 1],
+        ],
+        dim=-1,
+    )
+    sin_theta = torch.sin(theta)
+    eps = 1e-6
+    scale = theta / torch.clamp(2.0 * sin_theta, min=eps)
+    aa = vee * scale.unsqueeze(-1)
+
+    # For very small angles, first-order approximation: aa ~= 0.5 * vee
+    small = theta < 1e-4
+    if small.any():
+        aa = torch.where(small.unsqueeze(-1), 0.5 * vee, aa)
+    return aa
 
 
 
