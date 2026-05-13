@@ -17,7 +17,7 @@ This is the official implementation of the approach described in the preprint:
 PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation \
 Xiaohang Yu, Ti Wang, Mackenzie Weygandt Mathis
 
-![PRIMA teaser](images/teaser.png)
+![PRIMA teaser](https://raw.githubusercontent.com/AdaptiveMotorControlLab/PRIMA/main/images/teaser.png)
 
 
 ---

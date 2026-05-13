@@ -50,6 +50,11 @@ DEFAULT_HF_ASSET_REPO = "MLAdaptiveIntelligence/PRIMA"
 # Output folder for rendered images/meshes and keypoints
 DEFAULT_OUT_FOLDER = "demo_out_tta_gradio"
 
+# Gradio examples load from GitHub so the Space git repo can omit demo PNG/JPG (HF rejects them in git pushes).
+_DEMO_EXAMPLE_BASE = (
+    "https://raw.githubusercontent.com/AdaptiveMotorControlLab/PRIMA/main/demo_data/"
+)
+
 
 def _is_truthy_env(var_name: str) -> bool:
     return os.environ.get(var_name, "").strip().lower() in {"1", "true", "yes", "on"}
@@ -506,7 +511,7 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
         ),
         examples=[
             [
-                "demo_data/000000015956_horse.png",
+                f"{_DEMO_EXAMPLE_BASE}000000015956_horse.png",
                 1e-6,
                 30,
                 0.7,
@@ -515,7 +520,7 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
                 True,
             ],
             [
-                "demo_data/n02412080_12159.png",
+                f"{_DEMO_EXAMPLE_BASE}n02412080_12159.png",
                 1e-6,
                 30,
                 0.7,
@@ -524,7 +529,7 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
                 True,
             ],
             [
-                "demo_data/000000315905_zebra.jpg",
+                f"{_DEMO_EXAMPLE_BASE}000000315905_zebra.jpg",
                 1e-6,
                 30,
                 0.7,
@@ -533,7 +538,7 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
                 True,
             ],
             [
-                "demo_data/beagle.jpg",
+                f"{_DEMO_EXAMPLE_BASE}beagle.jpg",
                 1e-6,
                 0,
                 0.7,
@@ -542,7 +547,7 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
                 True,
             ],
             [
-                "demo_data/shepherd_hati.jpg",
+                f"{_DEMO_EXAMPLE_BASE}shepherd_hati.jpg",
                 1e-6,
                 0,
                 0.7,
