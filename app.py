@@ -51,6 +51,22 @@ DEFAULT_HF_ASSET_REPO = "MLAdaptiveIntelligence/PRIMA"
 DEFAULT_OUT_FOLDER = "demo_out_tta_gradio"
 
 
+def _is_truthy_env(var_name: str) -> bool:
+    return os.environ.get(var_name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _running_on_space() -> bool:
+    return bool(os.environ.get("SPACE_ID") or os.environ.get("HF_SPACE_ID"))
+
+
+def _should_preload_assets() -> bool:
+    """Default to preload on Spaces; configurable via PRIMA_PRELOAD_ASSETS."""
+    preload_env = os.environ.get("PRIMA_PRELOAD_ASSETS")
+    if preload_env is not None:
+        return _is_truthy_env("PRIMA_PRELOAD_ASSETS")
+    return _running_on_space()
+
+
 def _ensure_demo_assets(checkpoint_path: str) -> None:
     """Download required demo assets when running in a clean environment."""
     from scripts.setup_demo_data import (
@@ -74,6 +90,17 @@ def _ensure_demo_assets(checkpoint_path: str) -> None:
         force=False,
         hf_repo_id=hf_repo_id,
     )
+
+
+def _preload_assets_once(checkpoint_path: str) -> None:
+    checkpoint = Path(checkpoint_path)
+    cfg_path = checkpoint.parent.parent / ".hydra" / "config.yaml"
+    if checkpoint.exists() and cfg_path.exists():
+        print("[startup] Assets already present; skipping preload.")
+        return
+    print("[startup] Preloading demo assets from Hugging Face Hub...")
+    _ensure_demo_assets(checkpoint_path)
+    print("[startup] Asset preload complete.")
 
 
 def _load_prima_model(checkpoint_path: str = DEFAULT_CHECKPOINT):
@@ -420,7 +447,7 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
             return
         yield first_before, first_after, first_kpts, "OK"
 
-    return gr.Interface(
+    demo = gr.Interface(
         fn=gradio_inference,
         analytics_enabled=False,
         cache_examples=False,
@@ -525,6 +552,8 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
             ],
         ],
     )
+    demo.queue(max_size=8, default_concurrency_limit=1)
+    return demo
 
 
 def parse_args() -> argparse.Namespace:
@@ -546,5 +575,7 @@ def parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = parse_args()
+    if _should_preload_assets():
+        _preload_assets_once(args.checkpoint)
     demo = build_demo(checkpoint_path=args.checkpoint, out_folder=args.out_folder)
     demo.launch()
