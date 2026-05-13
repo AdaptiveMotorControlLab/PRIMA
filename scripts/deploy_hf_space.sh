@@ -17,7 +17,7 @@ echo "[deploy] Archiving ${BRANCH} from ${ROOT} ..."
 git archive "$BRANCH" | tar -x -C "$TMP"
 cd "$TMP"
 
-echo "[deploy] Stripping demo images / teaser from snapshot (still on GitHub raw URLs) ..."
+echo "[deploy] Stripping demo images / teaser from snapshot (HF rejects PNG/JPG in git) ..."
 rm -f demo_data/*.png demo_data/*.jpg demo_data/*.jpeg 2>/dev/null || true
 rm -f images/teaser.png 2>/dev/null || true
 
