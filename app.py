@@ -50,11 +50,6 @@ DEFAULT_HF_ASSET_REPO = "MLAdaptiveIntelligence/PRIMA"
 # Output folder for rendered images/meshes and keypoints
 DEFAULT_OUT_FOLDER = "demo_out_tta_gradio"
 
-# Gradio examples load from GitHub so the Space git repo can omit demo PNG/JPG (HF rejects them in git pushes).
-_DEMO_EXAMPLE_BASE = (
-    "https://raw.githubusercontent.com/AdaptiveMotorControlLab/PRIMA/main/demo_data/"
-)
-
 
 def _is_truthy_env(var_name: str) -> bool:
     return os.environ.get(var_name, "").strip().lower() in {"1", "true", "yes", "on"}
@@ -62,6 +57,32 @@ def _is_truthy_env(var_name: str) -> bool:
 
 def _running_on_space() -> bool:
     return bool(os.environ.get("SPACE_ID") or os.environ.get("HF_SPACE_ID"))
+
+
+def _gradio_examples_for_interface() -> List[List]:
+    """Gradio prefetches example media at startup.
+
+    Hugging Face Spaces omit demo PNG/JPG from git (binary push policy), and URL-based
+    examples can 404 depending on host / redirects. Use absolute paths only when files
+    exist beside ``app.py``; on Spaces return an empty list so no ``examples=`` is set.
+    """
+    if _running_on_space():
+        return []
+    if _is_truthy_env("PRIMA_DISABLE_GRADIO_EXAMPLES"):
+        return []
+    rows: List[List] = []
+    template: List[Tuple[str, float, int, float, float, bool, bool]] = [
+        ("demo_data/000000015956_horse.png", 1e-6, 30, 0.7, 0.1, False, True),
+        ("demo_data/n02412080_12159.png", 1e-6, 30, 0.7, 0.1, False, True),
+        ("demo_data/000000315905_zebra.jpg", 1e-6, 30, 0.7, 0.1, False, True),
+        ("demo_data/beagle.jpg", 1e-6, 0, 0.7, 0.1, False, True),
+        ("demo_data/shepherd_hati.jpg", 1e-6, 0, 0.7, 0.1, False, True),
+    ]
+    for rel, *rest in template:
+        p = _REPO_ROOT / rel
+        if p.is_file():
+            rows.append([str(p), *rest])
+    return rows
 
 
 def _should_preload_assets() -> bool:
@@ -452,7 +473,8 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
             return
         yield first_before, first_after, first_kpts, "OK"
 
-    demo = gr.Interface(
+    _gradio_examples = _gradio_examples_for_interface()
+    _iface_kw = dict(
         fn=gradio_inference,
         analytics_enabled=False,
         cache_examples=False,
@@ -509,54 +531,10 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
             "Results (PNG/OBJ and 26-keypoint visualizations) are saved under "
             f"'{out_folder}'."
         ),
-        examples=[
-            [
-                f"{_DEMO_EXAMPLE_BASE}000000015956_horse.png",
-                1e-6,
-                30,
-                0.7,
-                0.1,
-                False,
-                True,
-            ],
-            [
-                f"{_DEMO_EXAMPLE_BASE}n02412080_12159.png",
-                1e-6,
-                30,
-                0.7,
-                0.1,
-                False,
-                True,
-            ],
-            [
-                f"{_DEMO_EXAMPLE_BASE}000000315905_zebra.jpg",
-                1e-6,
-                30,
-                0.7,
-                0.1,
-                False,
-                True,
-            ],
-            [
-                f"{_DEMO_EXAMPLE_BASE}beagle.jpg",
-                1e-6,
-                0,
-                0.7,
-                0.1,
-                False,
-                True,
-            ],
-            [
-                f"{_DEMO_EXAMPLE_BASE}shepherd_hati.jpg",
-                1e-6,
-                0,
-                0.7,
-                0.1,
-                False,
-                True,
-            ],
-        ],
     )
+    if _gradio_examples:
+        _iface_kw["examples"] = _gradio_examples
+    demo = gr.Interface(**_iface_kw)
     demo.queue(max_size=8, default_concurrency_limit=1)
     return demo
 
