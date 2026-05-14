@@ -22,9 +22,11 @@ Gradio interface. The overall logic follows:
 """
 
 import argparse
+import concurrent.futures
 import os
 import sys
 import tempfile
+import time
 import traceback
 from types import SimpleNamespace
 from typing import List, Tuple
@@ -88,6 +90,19 @@ def _should_preload_assets() -> bool:
     if preload_env is not None:
         return _is_truthy_env("PRIMA_PRELOAD_ASSETS")
     return _running_on_space()
+
+
+def _gradio_heartbeat_interval_sec() -> float:
+    """How often to yield status while waiting on long CPU/GPU work (keeps WebSockets alive).
+
+    Set ``PRIMA_GRADIO_HEARTBEAT_SEC`` to ``0`` to run long work on the Gradio thread (old behavior).
+    """
+    raw = os.environ.get("PRIMA_GRADIO_HEARTBEAT_SEC", "25").strip()
+    try:
+        v = float(raw)
+    except ValueError:
+        return 25.0
+    return max(0.0, v)
 
 
 def _ensure_demo_assets(checkpoint_path: str) -> None:
@@ -175,6 +190,14 @@ def _build_detector():
     cfg.MODEL.DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     detector = detectron2.engine.DefaultPredictor(cfg)
     return detector
+
+
+def _load_model_and_detector_for_demo(checkpoint_path: str):
+    """Run on a worker thread when using heartbeat polling (single entry point for executor)."""
+    model, model_cfg, renderer, device = _load_prima_model(checkpoint_path)
+    detector = _build_detector()
+    return model, model_cfg, renderer, device, detector
+
 
 # SuperAnimal defaults (same as in demo_tta parser)
 SUPER_ANIMAL_ARGS = SimpleNamespace(
@@ -401,7 +424,7 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
         """Wrapper for Gradio. ``image`` is an RGB numpy array.
 
         Yields intermediate status so long first-run (Hub downloads + model load)
-        does not hit silent client/proxy timeouts.
+        and long inference do not hit silent client/proxy WebSocket timeouts.
         """
 
         if image is None:
@@ -415,6 +438,8 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
 
         yield None, None, None, "Queued; preparing run…"
 
+        hb = _gradio_heartbeat_interval_sec()
+
         if runtime_cache["model"] is None:
             yield (
                 None,
@@ -425,8 +450,24 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
                 "mean the session is still alive.",
             )
             try:
-                model, model_cfg, renderer, device = _load_prima_model(checkpoint_path)
-                detector = _build_detector()
+                if hb <= 0:
+                    model, model_cfg, renderer, device, detector = _load_model_and_detector_for_demo(
+                        checkpoint_path
+                    )
+                else:
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                        fut = pool.submit(_load_model_and_detector_for_demo, checkpoint_path)
+                        t0 = time.monotonic()
+                        while True:
+                            try:
+                                model, model_cfg, renderer, device, detector = fut.result(timeout=hb)
+                                break
+                            except concurrent.futures.TimeoutError:
+                                elapsed = int(time.monotonic() - t0)
+                                yield None, None, None, (
+                                    f"First run: still loading model and assets ({elapsed}s). "
+                                    f"Updates every ~{int(hb)}s keep the browser connection open on Spaces."
+                                )
             except Exception:
                 yield None, None, None, f"Model initialization failed:\n{traceback.format_exc()}"
                 return
@@ -438,21 +479,54 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
             yield None, None, None, "Model loaded. Running detection and inference…"
 
         try:
-            before_imgs, after_imgs, kpt_imgs, mesh_before, mesh_after = _collect_animal_results(
-                runtime_cache["model"],
-                runtime_cache["model_cfg"],
-                runtime_cache["renderer"],
-                runtime_cache["device"],
-                runtime_cache["detector"],
-                out_folder,
-                img_rgb,
-                tta_lr=tta_lr,
-                tta_num_iters=tta_num_iters,
-                det_thresh=det_thresh,
-                kp_conf_thresh=kp_conf_thresh,
-                side_view=side_view,
-                save_mesh=save_mesh,
-            )
+            if hb <= 0:
+                before_imgs, after_imgs, kpt_imgs, mesh_before, mesh_after = _collect_animal_results(
+                    runtime_cache["model"],
+                    runtime_cache["model_cfg"],
+                    runtime_cache["renderer"],
+                    runtime_cache["device"],
+                    runtime_cache["detector"],
+                    out_folder,
+                    img_rgb,
+                    tta_lr=tta_lr,
+                    tta_num_iters=tta_num_iters,
+                    det_thresh=det_thresh,
+                    kp_conf_thresh=kp_conf_thresh,
+                    side_view=side_view,
+                    save_mesh=save_mesh,
+                )
+            else:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    fut = pool.submit(
+                        _collect_animal_results,
+                        runtime_cache["model"],
+                        runtime_cache["model_cfg"],
+                        runtime_cache["renderer"],
+                        runtime_cache["device"],
+                        runtime_cache["detector"],
+                        out_folder,
+                        img_rgb,
+                        tta_lr,
+                        tta_num_iters,
+                        det_thresh,
+                        kp_conf_thresh,
+                        side_view,
+                        save_mesh,
+                    )
+                    t0 = time.monotonic()
+                    while True:
+                        try:
+                            before_imgs, after_imgs, kpt_imgs, mesh_before, mesh_after = fut.result(
+                                timeout=hb
+                            )
+                            break
+                        except concurrent.futures.TimeoutError:
+                            elapsed = int(time.monotonic() - t0)
+                            yield None, None, None, (
+                                f"Inference still running ({elapsed}s). "
+                                f"Detection, SuperAnimal, and TTA can take several minutes; "
+                                f"updates every ~{int(hb)}s keep the connection alive."
+                            )
         except Exception:
             yield None, None, None, f"Inference failed:\n{traceback.format_exc()}"
             return
