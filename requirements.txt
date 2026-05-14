@@ -1,6 +1,12 @@
 huggingface_hub<1
 torch==2.2.1
 torchvision==0.17.1
+# Gradio demo (app.py) + Hugging Face Space
+gradio==5.1.0
+fastapi==0.110.0
+starlette==0.36.3
+jinja2==3.1.4
+pydantic==2.10.6
 deeplabcut
 pytorch-lightning==2.5.5
 yacs==0.1.8

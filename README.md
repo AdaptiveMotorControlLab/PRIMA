@@ -56,6 +56,35 @@ pip install prima-animal
 
 `prima-animal` includes demo runtime dependencies used by `demo.py`, `demo_tta.py`, and `app.py` (including Detectron2 and DeepLabCut).
 
+### Clean install from this repository
+
+Use these when developing from a **git clone** (not the PyPI wheel).
+
+**Local (fresh venv, LFS assets, Hub demo weights, smoke test):**
+
+```bash
+chmod +x scripts/clean_install_local.sh scripts/clean_redeploy_hf_space.sh scripts/deploy_hf_space.sh
+./scripts/clean_install_local.sh
+```
+
+Options:
+
+- `PRIMA_VENV=.venv ./scripts/clean_install_local.sh --skip-data` — skip the large `setup_demo_data` download if `data/` is already populated.
+- `./scripts/clean_install_local.sh --wipe-data --force-data` — delete downloaded `data/` assets and redownload.
+- `./scripts/clean_install_local.sh --no-editable` — only `requirements.txt` (no `pip install -e .`); use if editable install fails and you will install the training stack via conda as in the PyPI section above.
+
+After `requirements.txt`, the script runs `pip install -e .` when possible so you get **mmcv**, **open3d**, **Detectron2**, and the rest of `pyproject.toml` (this can fail on some platforms; use conda + README steps if needed).
+
+**Hugging Face Space (full redeploy from your working tree):**
+
+Requires [Git LFS / Xet](https://huggingface.co/docs/hub/xet/using-xet-storage#git) tooling (`brew install git-lfs git-xet`, `git xet install`, `git lfs install`). Then:
+
+```bash
+./scripts/clean_redeploy_hf_space.sh
+```
+
+This is equivalent to `./scripts/deploy_hf_space.sh` and force-pushes a fresh snapshot to the Space.
+
 ---
 
 ## Demo
@@ -149,10 +178,12 @@ git xet install
 git lfs install
 ```
 
-Then from a clean checkout with LFS files present, deploy the Space repo:
+Then from a clean checkout with LFS files present, redeploy the Space (same as `clean_redeploy_hf_space.sh`):
 
 ```bash
 ./scripts/deploy_hf_space.sh
+# or
+./scripts/clean_redeploy_hf_space.sh
 ```
 
 The script rsyncs the working tree (not `git archive`) so image files are materialized
