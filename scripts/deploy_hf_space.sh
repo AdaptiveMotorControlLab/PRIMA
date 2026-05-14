@@ -8,6 +8,8 @@
 # Prerequisites: brew install git-lfs git-xet && git xet install && git lfs install
 set -euo pipefail
 
+export GIT_TERMINAL_PROMPT=0
+
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 SPACE_URL="${HF_SPACE_GIT_URL:-https://huggingface.co/spaces/MLAdaptiveIntelligence/PRIMA-demo.git}"

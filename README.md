@@ -58,7 +58,7 @@ pip install prima-animal
 
 ### Clean install from this repository
 
-Use these when developing from a **git clone** (not the PyPI wheel).
+Use these when developing from a **git clone** (not the PyPI wheel). The shell scripts are **non-interactive** (pip uses `--no-input`; `GIT_TERMINAL_PROMPT=0` for git). Put Hugging Face credentials in your environment or git credential helper before pushing the Space.
 
 **Local (fresh venv, LFS assets, Hub demo weights, smoke test)** — requires **Python 3.10+**
 (`gradio==5.1.0` and `app.py` type hints). On macOS without `python3.10` on your `PATH`, install

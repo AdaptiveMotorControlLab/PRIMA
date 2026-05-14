@@ -558,4 +558,4 @@ if __name__ == "__main__":
     if _should_preload_assets():
         _preload_assets_once(args.checkpoint)
     demo = build_demo(checkpoint_path=args.checkpoint, out_folder=args.out_folder)
-    demo.launch()
+    demo.launch(inbrowser=False)

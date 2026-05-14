@@ -10,6 +10,11 @@
 #   ./scripts/clean_install_local.sh --wipe-data --force-data
 set -euo pipefail
 
+# Non-interactive: no pip/git credential prompts on stdin.
+export GIT_TERMINAL_PROMPT=0
+export PIP_DISABLE_PIP_VERSION_CHECK=1
+export HF_HUB_DISABLE_SYMLINKS_WARNING=1
+
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
@@ -108,9 +113,9 @@ echo "[clean-install] Creating venv: ${VENV}"
 # shellcheck disable=SC1090
 source "${VENV}/bin/activate"
 
-python -m pip install -U pip wheel
+python -m pip install --no-input -U pip wheel
 # Match requirements.txt / pyproject pins before pulling the rest
-python -m pip install "setuptools<81" "packaging<25" "Cython<3"
+python -m pip install --no-input "setuptools<81" "packaging<25" "Cython<3"
 
 echo "[clean-install] pip install -r requirements.txt (this can take a long time) ..."
 REQ_FILE="${ROOT}/requirements.txt"
@@ -123,12 +128,12 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   REQ_FILE="${REQ_TMP}"
   echo "[clean-install] macOS: installing without deeplabcut line (use conda for DLC + TTA; Gradio with TTA iters=0 still works)."
 fi
-python -m pip install -r "${REQ_FILE}"
+python -m pip install --no-input -r "${REQ_FILE}"
 [[ -n "${REQ_TMP}" ]] && rm -f "${REQ_TMP}"
 
 if [[ "$EDITABLE" -eq 1 ]]; then
   echo "[clean-install] pip install --no-deps -e . (register package; runtime deps from requirements.txt) ..."
-  python -m pip install --no-deps -e "${ROOT}"
+  python -m pip install --no-input --no-deps -e "${ROOT}"
 fi
 
 if [[ "$WIPE_DATA" -eq 1 ]]; then
