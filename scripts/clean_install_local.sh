@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Fresh local environment: venv, pip deps, LFS assets, demo checkpoints, smoke test.
 #
+# Requires Python 3.10+ (matches README, Space, and type hints in app.py).
+#
 # Usage:
 #   ./scripts/clean_install_local.sh
+#   PRIMA_PYTHON=/opt/homebrew/bin/python3.10 ./scripts/clean_install_local.sh
 #   PRIMA_VENV=.venv ./scripts/clean_install_local.sh --skip-data
 #   ./scripts/clean_install_local.sh --wipe-data --force-data
 set -euo pipefail
@@ -40,6 +43,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     -h|--help)
       echo "Usage: $0 [--venv DIR] [--skip-data] [--force-data] [--wipe-data] [--no-editable]"
+      echo "Env: PRIMA_PYTHON=python3.10  PRIMA_VENV=.venv"
       exit 0
       ;;
     *)
@@ -49,7 +53,42 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+resolve_python() {
+  if [[ -n "${PRIMA_PYTHON:-}" ]]; then
+    if [[ -x "${PRIMA_PYTHON}" ]] || command -v "${PRIMA_PYTHON}" >/dev/null 2>&1; then
+      echo "${PRIMA_PYTHON}"
+      return 0
+    fi
+    echo "[clean-install] ERROR: PRIMA_PYTHON=${PRIMA_PYTHON} is not executable." >&2
+    return 1
+  fi
+  local c p
+  for c in python3.12 python3.11 python3.10; do
+    if command -v "$c" >/dev/null 2>&1; then
+      if "$c" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
+        command -v "$c"
+        return 0
+      fi
+    fi
+  done
+  for p in /opt/homebrew/bin/python3.10 /usr/local/bin/python3.10; do
+    if [[ -x "$p" ]]; then
+      echo "$p"
+      return 0
+    fi
+  done
+  return 1
+}
+
 echo "[clean-install] Repository: ${ROOT}"
+
+if ! PY="$(resolve_python)"; then
+  echo "[clean-install] ERROR: Need Python 3.10 or newer (Gradio 5 + app type hints)." >&2
+  echo "  macOS: brew install python@3.10" >&2
+  echo "  Then: PRIMA_PYTHON=/opt/homebrew/bin/python3.10 $0 ..." >&2
+  exit 1
+fi
+echo "[clean-install] Using Python: $("$PY" -c 'import sys; print(sys.executable, sys.version.split()[0])')"
 
 if command -v git-lfs >/dev/null 2>&1; then
   echo "[clean-install] git lfs pull (demo images / teaser) ..."
@@ -65,22 +104,31 @@ if [[ -d "$VENV" ]]; then
 fi
 
 echo "[clean-install] Creating venv: ${VENV}"
-python3 -m venv "$VENV"
+"$PY" -m venv "$VENV"
 # shellcheck disable=SC1090
 source "${VENV}/bin/activate"
 
-python -m pip install -U pip wheel setuptools
+python -m pip install -U pip wheel
+# Match requirements.txt / pyproject pins before pulling the rest
+python -m pip install "setuptools<81" "packaging<25" "Cython<3"
 
 echo "[clean-install] pip install -r requirements.txt (this can take a long time) ..."
-python -m pip install -r "${ROOT}/requirements.txt"
+REQ_FILE="${ROOT}/requirements.txt"
+REQ_TMP=""
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  # deeplabcut pins PyTables 3.8.x, which often fails to build from source on macOS/arm64.
+  # Hugging Face Spaces (Linux) use the full requirements.txt unchanged.
+  REQ_TMP="$(mktemp)"
+  grep -vE '^[[:space:]]*deeplabcut' "${ROOT}/requirements.txt" > "${REQ_TMP}"
+  REQ_FILE="${REQ_TMP}"
+  echo "[clean-install] macOS: installing without deeplabcut line (use conda for DLC + TTA; Gradio with TTA iters=0 still works)."
+fi
+python -m pip install -r "${REQ_FILE}"
+[[ -n "${REQ_TMP}" ]] && rm -f "${REQ_TMP}"
 
 if [[ "$EDITABLE" -eq 1 ]]; then
-  echo "[clean-install] pip install -e . (editable package) ..."
-  if python -m pip install -e "${ROOT}"; then
-    :
-  else
-    echo "[clean-install] WARN: editable install failed (often Detectron2 / mmcv build). Try the conda instructions in README.md, or use --no-editable." >&2
-  fi
+  echo "[clean-install] pip install --no-deps -e . (register package; runtime deps from requirements.txt) ..."
+  python -m pip install --no-deps -e "${ROOT}"
 fi
 
 if [[ "$WIPE_DATA" -eq 1 ]]; then
@@ -98,6 +146,8 @@ if [[ "$SKIP_DATA" -eq 0 ]]; then
 else
   echo "[clean-install] Skipping setup_demo_data (--skip-data)."
 fi
+
+export PYTHONPATH="${ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 
 echo "[clean-install] Smoke test: import app + build_demo ..."
 python -c "import app; app.build_demo(); print('[clean-install] Gradio demo build: OK')"
