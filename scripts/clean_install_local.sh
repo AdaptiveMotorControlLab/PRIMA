@@ -131,6 +131,10 @@ fi
 python -m pip install --no-input -r "${REQ_FILE}"
 [[ -n "${REQ_TMP}" ]] && rm -f "${REQ_TMP}"
 
+# Spaces install Gradio separately; local venv needs it for app.py.
+echo "[clean-install] Installing Gradio for local demo (HF Space provides its own) ..."
+python -m pip install --no-input "gradio>=5.1,<7"
+
 if [[ "$EDITABLE" -eq 1 ]]; then
   echo "[clean-install] pip install --no-deps -e . (register package; runtime deps from requirements.txt) ..."
   python -m pip install --no-input --no-deps -e "${ROOT}"
