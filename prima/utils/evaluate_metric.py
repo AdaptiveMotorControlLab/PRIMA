@@ -109,34 +109,29 @@ class Evaluator:
         self.image_size = image_size
     
     def compute_pck(self, output: Dict, batch: Dict, pck_threshold: Union[List, None]):
-        pred_keypoints_2d = output['pred_keypoints_2d'].detach().cpu()
-        gt_keypoints_2d = batch['keypoints_2d'].detach().cpu()
-        self.pck_threshold_list = []
-        
-        pred_keypoints_2d = (pred_keypoints_2d + 0.5) * self.image_size  # * batch['bbox_expand_factor'].detach().cpu().numpy().reshape(-1, 1, 1)
-        conf = gt_keypoints_2d[:, :, -1]
-        gt_keypoints_2d = (gt_keypoints_2d[:, :, :-1] + 0.5) * self.image_size  # * batch['bbox_expand_factor'].detach().cpu().numpy().reshape(-1, 1, 1)
-        if pck_threshold is not None:
-            for i in range(len(pck_threshold)):
-                self.pck_threshold_list.append(torch.tensor([pck_threshold[i]] * len(pred_keypoints_2d), dtype=torch.float32))
-        if len(self.pck_threshold_list) == 0:
+        if pck_threshold is None or len(pck_threshold) == 0:
             return torch.tensor([], dtype=torch.float32)
 
-        pcks = []
-        # Use mask area if available, otherwise use full image area
+        pred_keypoints_2d = output['pred_keypoints_2d'].detach().cpu()
+        gt_keypoints_2d = batch['keypoints_2d'].detach().cpu()
+
+        pred_keypoints_2d = (pred_keypoints_2d + 0.5) * self.image_size
+        conf = gt_keypoints_2d[:, :, -1]
+        gt_keypoints_2d = (gt_keypoints_2d[:, :, :-1] + 0.5) * self.image_size
+
         if 'mask' in batch and batch['mask'] is not None:
             seg_area = torch.sum(batch['mask'].detach().cpu().reshape(batch['mask'].shape[0], -1), dim=-1).unsqueeze(-1)
         else:
-            # Use full image area as fallback
             seg_area = torch.tensor([self.image_size * self.image_size] * len(pred_keypoints_2d), dtype=torch.float32).unsqueeze(-1)
-        total_visible = torch.sum(conf, dim=-1).clamp_min(1e-6)
-        for th in self.pck_threshold_list:
-            dist = torch.norm(pred_keypoints_2d - gt_keypoints_2d, dim=-1)
 
-            hits = (dist / torch.sqrt(seg_area)) < th.unsqueeze(1)
-            pck = torch.sum(hits.float() * conf, dim=-1) / total_visible
-            pcks.append(pck.numpy().tolist())
-        return torch.mean(torch.tensor(pcks), dim=1)
+        total_visible = torch.sum(conf, dim=-1).clamp_min(1e-6)                # (B,)
+        dist = torch.norm(pred_keypoints_2d - gt_keypoints_2d, dim=-1)         # (B, K)
+        norm_dist = dist / torch.sqrt(seg_area)                                # (B, K)
+
+        thresholds = torch.tensor(pck_threshold, dtype=torch.float32).view(-1, 1, 1)  # (T, 1, 1)
+        hits = (norm_dist.unsqueeze(0) < thresholds).float()                   # (T, B, K)
+        pcks = (hits * conf.unsqueeze(0)).sum(dim=-1) / total_visible.unsqueeze(0)    # (T, B)
+        return pcks.mean(dim=1)                                                # (T,)
 
     def compute_pa_mpjpe(self, pred_joints, gt_joints):
         S1_hat = compute_similarity_transform(pred_joints, gt_joints)
@@ -181,15 +176,11 @@ class Evaluator:
         auc = self.compute_auc(batch, output)
         return pck.tolist(), auc
     
-    def compute_auc(self, batch: Dict, output: Dict, threshold_min: int=0.0, threshold_max: int=1.0, steps: int=100):
+    def compute_auc(self, batch: Dict, output: Dict, threshold_min: float=0.0, threshold_max: float=1.0, steps: int=100):
         thresholds = np.linspace(threshold_min, threshold_max, steps)
-        norm_factor = np.trapz(np.ones_like(thresholds), thresholds)
-        pck_curve = []
-        for th in thresholds:
-            pck_curve.append(self.compute_pck(output, batch, [th]))
-        pck_curve = torch.tensor(pck_curve).tolist()
-        auc = np.trapz(pck_curve, thresholds)
-        auc /= norm_factor
+        pck_curve = self.compute_pck(output, batch, thresholds.tolist()).numpy()  # (steps,)
+        norm_factor = threshold_max - threshold_min
+        auc = float(np.trapz(pck_curve, thresholds) / norm_factor)
         return auc
 
     def smal_forward(self, batch: Dict):
