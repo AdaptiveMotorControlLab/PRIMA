@@ -22,6 +22,7 @@ from prima.models import load_prima
 from prima.utils import recursive_to
 from prima.datasets.vitdet_dataset import ViTDetDataset, DEFAULT_MEAN, DEFAULT_STD
 from prima.utils.renderer import Renderer, cam_crop_to_full
+from prima.utils.weights import DEFAULT_HF_REPO_ID, resolve_prima_checkpoint_path
 import detectron2
 from detectron2 import model_zoo
 import warnings
@@ -29,13 +30,18 @@ warnings.filterwarnings("ignore")
 
 LIGHT_BLUE = (0.65098039, 0.74117647, 0.85882353)
 GREEN = (0.65, 0.86, 0.74)
-
+REPO_ROOT = Path(__file__).resolve().parent
 
 
 def main():
     parser = argparse.ArgumentParser(description='prima demo code')
-    parser.add_argument('--checkpoint', type=str,
-                        help='Path to pretrained model checkpoint')
+    parser.add_argument('--checkpoint', type=str, default='',
+                        help='Path to pretrained model checkpoint. Empty -> auto-download the default Stage 1 checkpoint.')
+    parser.add_argument('--hf-repo-id', '--hf_repo_id', dest='hf_repo_id',
+                        type=str, default=os.environ.get("PRIMA_HF_REPO_ID", DEFAULT_HF_REPO_ID),
+                        help='Hugging Face repo ID containing PRIMA demo assets')
+    parser.add_argument('--no-auto-download', '--no_auto_download', dest='no_auto_download', action='store_true',
+                        help='Disable automatic download of missing PRIMA demo assets')
     parser.add_argument('--img_folder', type=str, default='demo_data/', help='Folder with input images')
     parser.add_argument('--out_folder', type=str, default='demo_out', help='Output folder to save rendered results')
     parser.add_argument('--side_view', dest='side_view', action='store_true', default=False,
@@ -48,7 +54,14 @@ def main():
 
     args = parser.parse_args()
 
-    model, model_cfg = load_prima(args.checkpoint)
+    checkpoint_path = resolve_prima_checkpoint_path(
+        args.checkpoint,
+        data_dir=REPO_ROOT / "data",
+        auto_download=not args.no_auto_download,
+        hf_repo_id=args.hf_repo_id,
+    )
+
+    model, model_cfg = load_prima(checkpoint_path)
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     model = model.to(device)
