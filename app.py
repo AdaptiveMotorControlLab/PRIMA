@@ -14,10 +14,10 @@ Gradio interface. The overall logic follows:
 
 1. Given an input image, run Detectron2 to detect animals.
 2. For each detected animal, run PRIMA for 3D pose/shape estimation.
-3. Run DeepLabCut SuperAnimal to obtain 2D keypoints.
-4. Map SuperAnimal 39 keypoints to the 26 PRIMA keypoints.
-5. Run test-time adaptation (TTA) with user-specified lr and iters.
-6. Render and save before/after TTA results and keypoint visualizations.
+3. Run the fine-tuned DeepLabCut SuperAnimal model to obtain PRIMA 26-keypoint
+   2D predictions.
+4. Run test-time adaptation (TTA) with user-specified lr and iters.
+5. Render and save before/after TTA results and keypoint visualizations.
 
 """
 
@@ -52,7 +52,7 @@ from prima.utils.detection import select_animal_boxes
 
 
 # Default checkpoint path following README instructions
-DEFAULT_CHECKPOINT = str(_REPO_ROOT / "data" / "PRIMAS1" / "checkpoints" / "s1ckpt.ckpt")
+DEFAULT_CHECKPOINT = str(_REPO_ROOT / "data" / "PRIMAS1" / "checkpoints" / "s1ckpt_inference.ckpt")
 DEFAULT_HF_ASSET_REPO = DEFAULT_HF_REPO_ID
 
 # Output folder for rendered images/meshes and keypoints
@@ -80,8 +80,8 @@ def _gradio_examples_for_interface() -> List[List]:
         ("demo_data/000000015956_horse.png", 1e-6, 30, 0.7, 0.1, False, True),
         ("demo_data/n02412080_12159.png", 1e-6, 30, 0.7, 0.1, False, True),
         ("demo_data/000000315905_zebra.jpg", 1e-6, 30, 0.7, 0.1, False, True),
-        ("demo_data/beagle.jpg", 1e-6, 0, 0.7, 0.1, False, True),
-        ("demo_data/shepherd_hati.jpg", 1e-6, 0, 0.7, 0.1, False, True),
+        ("demo_data/beagle.jpg", 1e-6, 30, 0.7, 0.1, False, True),
+        ("demo_data/shepherd_hati.jpg", 1e-6, 30, 0.7, 0.1, False, True),
     ]
     for rel, *rest in template:
         p = _REPO_ROOT / rel
@@ -189,6 +189,8 @@ SUPER_ANIMAL_ARGS = SimpleNamespace(
     superanimal_model_name="hrnet_w32",
     superanimal_detector_name="fasterrcnn_resnet50_fpn_v2",
     superanimal_max_individuals=1,
+    saved_2d_model_path="",
+    pytorch_config_2d_path=str(_REPO_ROOT / "configs" / "sa_finetune_hrnet_w32.yaml"),
 )
 
 
@@ -221,11 +223,14 @@ def _collect_animal_results(
     from prima.datasets.vitdet_dataset import ViTDetDataset
     from demo_tta import (
         denorm_patch_to_rgb,
-        map_superanimal_to_prima,
+        resolve_sa_weights_path,
         run_superanimal_on_patch,
         save_keypoint_vis,
         tta_optimize,
     )
+
+    if int(tta_num_iters) > 0 and not SUPER_ANIMAL_ARGS.saved_2d_model_path:
+        SUPER_ANIMAL_ARGS.saved_2d_model_path = resolve_sa_weights_path("")
 
     # Detect animals
     img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
@@ -325,14 +330,14 @@ def _collect_animal_results(
             # No keypoints => skip TTA for this animal
             continue
 
-        mapped_xyc = map_superanimal_to_prima(bodyparts_xyc)
-        mapped_xyc[mapped_xyc[:, 2] < float(kp_conf_thresh), 2] = 0.0
+        kpts_xyc = bodyparts_xyc
+        kpts_xyc[kpts_xyc[:, 2] < float(kp_conf_thresh), 2] = 0.0
 
         # Save keypoint visualization and npy
         kpt_png_path = os.path.join(out_folder, f"{img_fn}_{animal_id}_prima26_kpts.png")
-        save_keypoint_vis(patch_rgb, mapped_xyc, kpt_png_path)
+        save_keypoint_vis(patch_rgb, kpts_xyc, kpt_png_path)
         npy_path = os.path.join(out_folder, f"{img_fn}_{animal_id}_prima26_kpts.npy")
-        np.save(npy_path, mapped_xyc)
+        np.save(npy_path, kpts_xyc)
 
         if os.path.exists(kpt_png_path):
             kpt_bgr = cv2.imread(kpt_png_path)
@@ -341,10 +346,10 @@ def _collect_animal_results(
 
         # Normalize keypoints to [-0.5, 0.5] as in demo_tta
         patch_h, patch_w = patch_rgb.shape[:2]
-        mapped_norm = mapped_xyc.copy()
-        mapped_norm[:, 0] = mapped_norm[:, 0] / float(patch_w) - 0.5
-        mapped_norm[:, 1] = mapped_norm[:, 1] / float(patch_h) - 0.5
-        gt_kpts_norm = torch.from_numpy(mapped_norm[None]).to(device=device, dtype=batch["img"].dtype)
+        kpts_norm = kpts_xyc.copy()
+        kpts_norm[:, 0] = kpts_norm[:, 0] / float(patch_w) - 0.5
+        kpts_norm[:, 1] = kpts_norm[:, 1] / float(patch_h) - 0.5
+        gt_kpts_norm = torch.from_numpy(kpts_norm[None]).to(device=device, dtype=batch["img"].dtype)
 
         # Run TTA
         out_after = tta_optimize(
