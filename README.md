@@ -62,14 +62,15 @@ pip install prima-animal
 
 ### Checkpoints and data
 
-We provide an automated demo-download script for models hosted on Hugging Face.
-Use the helper script to download and place all demo assets automatically in `data/`:
+The demo scripts auto-download their default Stage 1 PRIMA assets from Hugging
+Face when the checkpoint or matching Hydra config is missing. To prefetch all
+demo assets, including both Stage 1 and Stage 3 checkpoints, run:
 
 ```bash
 python scripts/setup_demo_data.py --hf-repo-id MLAdaptiveIntelligence/PRIMA
 ```
 
-Approximate download volume from Hugging Face is ~24 GB total
+Approximate prefetch volume from Hugging Face is ~24 GB total
 (`s1ckpt.ckpt` ~10.2 GB + `s3ckpt.ckpt` ~10.2 GB + `amr_vitbb.pth` ~2.5 GB + SMAL files).
 Expected time is roughly:
 - 100 Mbps: ~35-45 minutes
@@ -78,6 +79,10 @@ Expected time is roughly:
 
 To avoid re-downloading completed assets, rerun without `--force`. The script now
 re-downloads only missing or invalid checkpoints.
+
+For custom asset repos, pass `--hf-repo-id <org/repo>` or set
+`PRIMA_HF_REPO_ID`. To require local files only, pass `--no-auto-download` to
+the demo scripts.
 
 Expected files in that Hugging Face repo root:
 - `my_smpl_00781_4_all.pkl`
@@ -95,7 +100,6 @@ Run animal detection + PRIMA 3D pose/shape inference:
 
 ```bash
 python demo.py \
-  --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt \
   --img_folder demo_data/ \
   --out_folder demo_out/
 ```
@@ -112,7 +116,6 @@ Example:
 
 ```bash
 python demo_tta.py \
-  --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt \
   --img_folder demo_data/ \
   --out_folder demo_out_tta/ \
   --tta_lr 1e-6 \
