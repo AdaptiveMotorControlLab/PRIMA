@@ -95,26 +95,21 @@ This is equivalent to `./scripts/deploy_hf_space.sh` and force-pushes a fresh sn
 ### Checkpoints and data
 
 The demo scripts auto-download their default Stage 1 PRIMA assets from Hugging
-Face when the checkpoint or matching Hydra config is missing. To prefetch all
-demo assets, including both Stage 1 and Stage 3 checkpoints, run:
+Face when the checkpoint or matching Hydra config is missing. If you want to
+pre-download all necessary checkpoints and data ahead of time, run:
 
 ```bash
 python scripts/setup_demo_data.py --hf-repo-id MLAdaptiveIntelligence/PRIMA
 ```
 
-Approximate prefetch volume from Hugging Face is ~17 GB total
-(`s1ckpt_inference.ckpt` ~3 GB + `s3ckpt.ckpt` ~10.2 GB + `amr_vitbb.pth` ~2.5 GB + SMAL files).
+Approximate default prefetch volume from Hugging Face is ~5.5 GB total
+(`s1ckpt_inference.ckpt` ~3 GB + `amr_vitbb.pth` ~2.5 GB + SMAL files).
 Expected time is roughly:
-- 100 Mbps: ~25-35 minutes
-- 300 Mbps: ~8-12 minutes
-- 1 Gbps: ~2-5 minutes
+- 100 Mbps: ~7-10 minutes
+- 300 Mbps: ~2-4 minutes
+- 1 Gbps: ~1 minute
 
-To avoid re-downloading completed assets, rerun without `--force`. The script now
-re-downloads only missing or invalid checkpoints.
-
-For custom asset repos, pass `--hf-repo-id <org/repo>` or set
-`PRIMA_HF_REPO_ID`. To require local files only, pass `--no-auto-download` to
-the demo scripts.
+Existing files are reused by default; pass `--force` only if you need to redownload them. If you also need the Stage 3 pretrained model, add `--include-stage3`.
 
 Expected files in that Hugging Face repo root:
 - `my_smpl_00781_4_all.pkl`
@@ -122,8 +117,10 @@ Expected files in that Hugging Face repo root:
 - `walking_toy_symmetric_pose_prior_with_cov_35parts.pkl`
 - `amr_vitbb.pth`
 - `config_s1_HYDRA.yaml`
-- `config_s3_HYDRA.yaml`
 - `s1ckpt_inference.ckpt`
+
+Optional Stage 3 prefetch expects:
+- `config_s3_HYDRA.yaml`
 - `s3ckpt.ckpt`
 
 ### Demo (without TTA)
@@ -131,30 +128,25 @@ Expected files in that Hugging Face repo root:
 Run animal detection + PRIMA 3D pose/shape inference:
 
 ```bash
-python demo.py \
-  --img_folder demo_data/ \
-  --out_folder demo_out/
+bash demo.sh
 ```
 
-Outputs are written to `demo_out/`.
+Outputs are written to `demo_out/`. Edit `demo.sh` if you want to use a custom
+checkpoint path.
 
 ---
 
 ### Demo (with TTA)
 
-`demo_tta.py` pipeline: specify learning rate and number of iterations:
-
-Example:
+Run PRIMA inference with test-time adaptation:
 
 ```bash
-python demo_tta.py \
-  --img_folder demo_data/ \
-  --out_folder demo_out_tta/ \
-  --tta_lr 1e-6 \
-  --tta_num_iters 30
+bash demo_tta.sh
 ```
 
-Outputs are written to `demo_out_tta/` (before/after TTA renders, keypoints, and optional meshes).
+Outputs are written to `demo_out_tta/` (before/after TTA renders, keypoints, and
+optional meshes). Edit `demo_tta.sh` if you want to change the checkpoint, TTA
+learning rate, or number of iterations.
 
 ---
 
@@ -171,6 +163,7 @@ python app.py \
 
 This starts a local Gradio app (by default on http://127.0.0.1:7860), where
 you can upload images and visualize PRIMA predictions and adaptation results.
+The `s1ckpt_inference.ckpt` checkpoint is downloaded automatically if missing.
 
 #### Hugging Face Space (maintainers)
 
