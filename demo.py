@@ -21,7 +21,6 @@ import torch.utils.data
 from prima.models import load_prima
 from prima.utils import recursive_to
 from prima.datasets.vitdet_dataset import ViTDetDataset, DEFAULT_MEAN, DEFAULT_STD
-from prima.utils.renderer import Renderer, cam_crop_to_full
 from prima.utils.weights import DEFAULT_HF_REPO_ID, resolve_prima_checkpoint_path
 import detectron2
 from detectron2 import model_zoo
@@ -31,6 +30,19 @@ warnings.filterwarnings("ignore")
 LIGHT_BLUE = (0.65098039, 0.74117647, 0.85882353)
 GREEN = (0.65, 0.86, 0.74)
 REPO_ROOT = Path(__file__).resolve().parent
+
+
+def load_renderer_components():
+    try:
+        from prima.utils.renderer import Renderer, cam_crop_to_full
+    except Exception as exc:
+        raise RuntimeError(
+            "Cannot initialize the PRIMA renderer. Rendering requires a working "
+            "pyrender/OpenGL backend such as EGL or OSMesa. Install the missing "
+            "OpenGL runtime for this environment, or run in an environment where "
+            "PYOPENGL_PLATFORM=egl/osmesa works."
+        ) from exc
+    return Renderer, cam_crop_to_full
 
 
 def main():
@@ -68,6 +80,7 @@ def main():
     model.eval()
 
     # Setup the renderer
+    Renderer, cam_crop_to_full = load_renderer_components()
     renderer = Renderer(model_cfg, faces=model.smal.faces)
 
     # Make output directory if it does not exist
