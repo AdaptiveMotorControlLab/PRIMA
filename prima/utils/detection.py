@@ -1,11 +1,19 @@
-"""Utilities for filtering animal detections before PRIMA demo inference.
+"""
+PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation
 
-Detectron2 may return both a full-animal box and a local/partial box for the
-same animal. These helpers keep the demo pipeline from rendering the same
-animal multiple times.
+Official implementation of the paper:
+"PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation"
+by Xiaohang Yu, Ti Wang, and Mackenzie Weygandt Mathis
+Licensed under a modified MIT license
 """
 
 from __future__ import annotations
+
+# Utilities for filtering animal detections before PRIMA demo inference.
+#
+# Detectron2 may return both a full-animal box and a local/partial box for the
+# same animal. These helpers keep the demo pipeline from rendering the same
+# animal multiple times.
 
 from typing import Iterable
 
