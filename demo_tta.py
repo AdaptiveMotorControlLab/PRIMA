@@ -12,8 +12,8 @@ Pipeline:
 1. Run Detectron2 to detect animals in the input image.
 2. Run PRIMA on each detected animal to obtain 3D pose/shape estimation.
 3. Run a fine-tuned DeepLabCut SuperAnimal pose model (Animal3D 26-joint
-   layout) to obtain 2D keypoints already in PRIMA topology -- no 39 -> 26
-   remapping needed. The fine-tuned snapshot is wired into DLC's
+   layout) to obtain 2D keypoints already in PRIMA topology. The fine-tuned
+   snapshot is wired into DLC's
    ``superanimal_analyze_images`` via the ``customized_pose_checkpoint``
    and ``customized_model_config`` kwargs.
 4. Run test-time adaptation (TTA) with user-specified lr and num_iters
