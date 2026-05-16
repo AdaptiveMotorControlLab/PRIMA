@@ -22,8 +22,6 @@ from ..utils.geometry import perspective_projection, aa_to_rotmat
 from ..utils.pylogger import get_pylogger
 from .backbones import create_backbone
 from .heads import build_smal_head
-from ..utils import MeshRenderer
-from ..utils import renderer
 from prima.models.smal_wrapper import SMAL
 from .discriminator import Discriminator
 
@@ -130,6 +128,8 @@ class PRIMA(pl.LightningModule):
         # init depth renderer for supervised training 
         # Setup renderer for visualization
         if init_renderer:
+            from ..utils import MeshRenderer
+
             self.mesh_renderer = MeshRenderer(self.cfg, faces=self.smal.faces.numpy())
         else:
             self.mesh_renderer = None
