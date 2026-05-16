@@ -45,6 +45,7 @@ from prima.models import load_prima
 from prima.utils import recursive_to
 from prima.datasets.vitdet_dataset import ViTDetDataset, DEFAULT_MEAN, DEFAULT_STD
 from prima.utils.renderer import Renderer, cam_crop_to_full
+from prima.utils.weights import DEFAULT_HF_REPO_ID, resolve_prima_checkpoint_path
 
 warnings.filterwarnings("ignore")
 
@@ -52,6 +53,7 @@ LIGHT_BLUE = (0.65098039, 0.74117647, 0.85882353)
 GREEN = (0.65, 0.86, 0.74)
 
 ANIMAL_COCO_IDS = [15, 16, 17, 18, 19, 21, 22]
+REPO_ROOT = Path(__file__).resolve().parent
 
 
 def denorm_patch_to_rgb(img_tensor: torch.Tensor) -> np.ndarray:
@@ -221,7 +223,13 @@ def tta_optimize(model, batch, gt_kpts_norm, num_iters, lr):
 
 def main():
     parser = argparse.ArgumentParser(description='PRIMA + SuperAnimal + TTA demo')
-    parser.add_argument('--checkpoint', type=str, required=True, help='Path to pretrained PRIMA checkpoint')
+    parser.add_argument('--checkpoint', type=str, default='',
+                        help='Path to pretrained PRIMA checkpoint. Empty -> auto-download the default Stage 1 checkpoint.')
+    parser.add_argument('--hf-repo-id', '--hf_repo_id', dest='hf_repo_id',
+                        type=str, default=os.environ.get("PRIMA_HF_REPO_ID", DEFAULT_HF_REPO_ID),
+                        help='Hugging Face repo ID containing PRIMA demo assets')
+    parser.add_argument('--no-auto-download', '--no_auto_download', dest='no_auto_download', action='store_true',
+                        help='Disable automatic download of missing PRIMA demo assets')
     parser.add_argument('--img_path', type=str, default=None, help='Single image path')
     parser.add_argument('--img_folder', type=str, default='demo_data/', help='Folder with input images')
     parser.add_argument('--out_folder', type=str, default='demo_out_tta', help='Output folder')
@@ -248,9 +256,15 @@ def main():
                              'Defaults to the bundled configs/sa_finetune_hrnet_w32.yaml.')
 
     args = parser.parse_args()
+    checkpoint_path = resolve_prima_checkpoint_path(
+        args.checkpoint,
+        data_dir=REPO_ROOT / "data",
+        auto_download=not args.no_auto_download,
+        hf_repo_id=args.hf_repo_id,
+    )
     args.saved_2d_model_path = resolve_sa_weights_path(args.saved_2d_model_path)
 
-    model, model_cfg = load_prima(args.checkpoint)
+    model, model_cfg = load_prima(checkpoint_path)
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     model = model.to(device)
     model.eval()
@@ -360,4 +374,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
