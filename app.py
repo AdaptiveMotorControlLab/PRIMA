@@ -42,10 +42,15 @@ _REPO_ROOT = Path(__file__).resolve().parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from prima.utils.weights import (
+    DEFAULT_HF_REPO_ID,
+    resolve_prima_checkpoint_path,
+)
+
 
 # Default checkpoint path following README instructions
-DEFAULT_CHECKPOINT = "data/PRIMAS1/checkpoints/s1ckpt.ckpt"
-DEFAULT_HF_ASSET_REPO = "MLAdaptiveIntelligence/PRIMA"
+DEFAULT_CHECKPOINT = str(_REPO_ROOT / "data" / "PRIMAS1" / "checkpoints" / "s1ckpt.ckpt")
+DEFAULT_HF_ASSET_REPO = DEFAULT_HF_REPO_ID
 
 # Output folder for rendered images/meshes and keypoints
 DEFAULT_OUT_FOLDER = "demo_out_tta_gradio"
@@ -90,39 +95,14 @@ def _should_preload_assets() -> bool:
     return _running_on_space()
 
 
-def _ensure_demo_assets(checkpoint_path: str) -> None:
-    """Download required demo assets when running in a clean environment."""
-    from scripts.setup_demo_data import (
-        maybe_download_smal,
-        maybe_download_backbone,
-        maybe_download_stage,
-    )
-
-    checkpoint = Path(checkpoint_path)
-    data_dir = checkpoint.parents[2]
-    hf_repo_id = os.environ.get("PRIMA_HF_REPO_ID", DEFAULT_HF_ASSET_REPO)
-
-    maybe_download_smal(data_dir, force=False, hf_repo_id=hf_repo_id)
-    maybe_download_backbone(data_dir, force=False, hf_repo_id=hf_repo_id)
-    maybe_download_stage(
-        "PRIMAS1",
-        "config_s1_HYDRA.yaml",
-        "s1ckpt.ckpt",
-        "s1ckpt.ckpt",
-        data_dir,
-        force=False,
-        hf_repo_id=hf_repo_id,
-    )
-
-
 def _preload_assets_once(checkpoint_path: str) -> None:
-    checkpoint = Path(checkpoint_path)
-    cfg_path = checkpoint.parent.parent / ".hydra" / "config.yaml"
-    if checkpoint.exists() and cfg_path.exists():
-        print("[startup] Assets already present; skipping preload.")
-        return
-    print("[startup] Preloading demo assets from Hugging Face Hub...")
-    _ensure_demo_assets(checkpoint_path)
+    print("[startup] Ensuring demo assets from Hugging Face Hub...")
+    resolve_prima_checkpoint_path(
+        checkpoint_path,
+        data_dir=_REPO_ROOT / "data",
+        auto_download=True,
+        hf_repo_id=os.environ.get("PRIMA_HF_REPO_ID", DEFAULT_HF_ASSET_REPO),
+    )
     print("[startup] Asset preload complete.")
 
 
@@ -131,10 +111,14 @@ def _load_prima_model(checkpoint_path: str = DEFAULT_CHECKPOINT):
     from prima.models import load_prima
     from prima.utils.renderer import Renderer
 
+    checkpoint_path = resolve_prima_checkpoint_path(
+        checkpoint_path,
+        data_dir=_REPO_ROOT / "data",
+        auto_download=True,
+        hf_repo_id=os.environ.get("PRIMA_HF_REPO_ID", DEFAULT_HF_ASSET_REPO),
+    )
     checkpoint = Path(checkpoint_path)
     cfg_path = checkpoint.parent.parent / ".hydra" / "config.yaml"
-    if not checkpoint.exists() or not cfg_path.exists():
-        _ensure_demo_assets(checkpoint_path)
     if not checkpoint.exists():
         raise FileNotFoundError(
             f"Missing checkpoint: {checkpoint}. Download demo checkpoints/data as described in README."
