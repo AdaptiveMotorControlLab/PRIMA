@@ -7,12 +7,10 @@ by Xiaohang Yu, Ti Wang, and Mackenzie Weygandt Mathis
 Licensed under a modified MIT license
 """
 
-import torch
 from typing import Any
-from .mesh_renderer import MeshRenderer
 
 
-def recursive_to(x: Any, target: torch.device):
+def recursive_to(x: Any, target: Any):
     """
     Recursively transfer a batch of data to the target device
     Args:
@@ -21,11 +19,27 @@ def recursive_to(x: Any, target: torch.device):
     Returns:
         Batch of data where all tensors are transferred to the target device.
     """
-    if isinstance(x, dict):
-        return {k: recursive_to(v, target) for k, v in x.items()}
-    elif isinstance(x, torch.Tensor):
-        return x.to(target)
-    elif isinstance(x, list):
-        return [recursive_to(i, target) for i in x]
-    else:
-        return x
+    import torch
+
+    def move(value: Any):
+        if isinstance(value, dict):
+            return {k: move(v) for k, v in value.items()}
+        if isinstance(value, torch.Tensor):
+            return value.to(target)
+        if isinstance(value, list):
+            return [move(i) for i in value]
+        return value
+
+    return move(x)
+
+
+def __getattr__(name: str):
+    if name == "MeshRenderer":
+        from .mesh_renderer import MeshRenderer
+
+        globals()[name] = MeshRenderer
+        return MeshRenderer
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+__all__ = ["MeshRenderer", "recursive_to"]
