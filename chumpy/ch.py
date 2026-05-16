@@ -5,11 +5,11 @@ Official implementation of the paper:
 "PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation"
 by Xiaohang Yu, Ti Wang, and Mackenzie Weygandt Mathis
 Licensed under a modified MIT license
-
-``chumpy.ch`` namespace expected by legacy SMAL pickles.
 """
 
 from __future__ import annotations
+
+# ``chumpy.ch`` namespace expected by legacy SMAL pickles.
 
 import numpy as np
 
