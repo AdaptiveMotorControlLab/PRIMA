@@ -46,6 +46,7 @@ from prima.utils.weights import (
     DEFAULT_HF_REPO_ID,
     resolve_prima_checkpoint_path,
 )
+from prima.utils.detection import select_animal_boxes
 
 
 # Default checkpoint path following README instructions
@@ -196,7 +197,6 @@ def _collect_animal_results(
     from prima.utils import recursive_to
     from prima.datasets.vitdet_dataset import ViTDetDataset
     from demo_tta import (
-        ANIMAL_COCO_IDS,
         denorm_patch_to_rgb,
         map_superanimal_to_prima,
         run_superanimal_on_patch,
@@ -214,15 +214,11 @@ def _collect_animal_results(
         det_out = detector(img_bgr)
         det_instances = det_out["instances"]
 
-        valid_idx = [
-            i
-            for i, (c, s) in enumerate(zip(det_instances.pred_classes, det_instances.scores))
-            if (int(c) in ANIMAL_COCO_IDS) and (float(s) > float(det_thresh))
-        ]
-        if len(valid_idx) == 0:
+        boxes, suppressed = select_animal_boxes(det_instances, score_threshold=float(det_thresh))
+        if suppressed > 0:
+            print(f"[INFO] Suppressed {suppressed} duplicate animal detection(s)")
+        if len(boxes) == 0:
             return [], [], [], None, None
-
-        boxes = det_instances.pred_boxes.tensor[valid_idx].cpu().numpy()
 
     dataset = ViTDetDataset(model_cfg, img_bgr, boxes)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
