@@ -102,12 +102,12 @@ demo assets, including both Stage 1 and Stage 3 checkpoints, run:
 python scripts/setup_demo_data.py --hf-repo-id MLAdaptiveIntelligence/PRIMA
 ```
 
-Approximate prefetch volume from Hugging Face is ~24 GB total
-(`s1ckpt.ckpt` ~10.2 GB + `s3ckpt.ckpt` ~10.2 GB + `amr_vitbb.pth` ~2.5 GB + SMAL files).
+Approximate prefetch volume from Hugging Face is ~17 GB total
+(`s1ckpt_inference.ckpt` ~3 GB + `s3ckpt.ckpt` ~10.2 GB + `amr_vitbb.pth` ~2.5 GB + SMAL files).
 Expected time is roughly:
-- 100 Mbps: ~35-45 minutes
-- 300 Mbps: ~12-18 minutes
-- 1 Gbps: ~4-8 minutes
+- 100 Mbps: ~25-35 minutes
+- 300 Mbps: ~8-12 minutes
+- 1 Gbps: ~2-5 minutes
 
 To avoid re-downloading completed assets, rerun without `--force`. The script now
 re-downloads only missing or invalid checkpoints.
@@ -123,7 +123,7 @@ Expected files in that Hugging Face repo root:
 - `amr_vitbb.pth`
 - `config_s1_HYDRA.yaml`
 - `config_s3_HYDRA.yaml`
-- `s1ckpt.ckpt`
+- `s1ckpt_inference.ckpt`
 - `s3ckpt.ckpt`
 
 ### Demo (without TTA)
@@ -165,7 +165,7 @@ browser:
 
 ```bash
 python app.py \
-  --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt \
+  --checkpoint data/PRIMAS1/checkpoints/s1ckpt_inference.ckpt \
   --out_folder demo_out_tta_gradio/
 ```
 
@@ -220,7 +220,7 @@ Training outputs are written to `logs/train/runs/<exp_name>/`.
 ```bash
 python eval.py \
   --config data/PRIMAS1/.hydra/config.yaml \
-  --checkpoint data/PRIMAS1/checkpoints/s1ckpt.ckpt
+  --checkpoint data/PRIMAS1/checkpoints/s1ckpt_inference.ckpt
 ```
 
 Common values for `--dataset` are controlled by:
