@@ -10,6 +10,7 @@ Licensed under a modified MIT license
 # Download and arrange PRIMA demo assets into the expected data/ layout.
 # Usage:
 #   python scripts/setup_demo_data.py
+#   python scripts/setup_demo_data.py --include-stage3
 #   python scripts/setup_demo_data.py --force
 
 from __future__ import annotations
@@ -33,15 +34,21 @@ def main() -> int:
     parser.add_argument("--data-dir", type=Path, default=Path("data"), help="Target data directory")
     parser.add_argument("--force", action="store_true", help="Redownload and overwrite existing files")
     parser.add_argument(
+        "--include-stage3",
+        action="store_true",
+        help="Also prefetch the Stage 3 checkpoint and config",
+    )
+    parser.add_argument(
         "--hf-repo-id",
         type=str,
         default=DEFAULT_HF_REPO_ID,
         help="Hugging Face repo ID containing demo assets (e.g., org/repo)",
     )
     args = parser.parse_args()
+    stages = ("PRIMAS1", "PRIMAS3") if args.include_stage3 else ("PRIMAS1",)
     ensure_demo_assets(
         args.data_dir,
-        stages=("PRIMAS1", "PRIMAS3"),
+        stages=stages,
         force=args.force,
         hf_repo_id=args.hf_repo_id,
     )
