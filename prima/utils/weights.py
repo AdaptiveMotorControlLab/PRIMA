@@ -263,7 +263,7 @@ def _ensure_assets_for_checkpoint(
 def ensure_demo_assets(
     data_dir: PathLike = "data",
     *,
-    stages: Union[str, Iterable[str]] = ("PRIMAS1", "PRIMAS3"),
+    stages: Union[str, Iterable[str]] = ("PRIMAS1",),
     force: bool = False,
     hf_repo_id: Optional[str] = None,
 ) -> None:
