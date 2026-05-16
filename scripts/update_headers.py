@@ -40,7 +40,7 @@ def should_skip_file(file_path):
     Returns:
         True if the file should be skipped, False otherwise
     """
-    skip_dirs = {'.git', '__pycache__', '.pytest_cache', 'venv', 'env', '.tox', 'build', 'dist', '.eggs'}
+    skip_dirs = {'.git', '__pycache__', '.pytest_cache', 'venv', '.venv', 'env', '.tox', 'build', 'dist', '.eggs', 'site-packages'}
     
     # Skip if in excluded directory
     for part in file_path.parts:

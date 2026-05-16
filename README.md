@@ -56,6 +56,38 @@ pip install prima-animal
 
 `prima-animal` includes demo runtime dependencies used by `demo.py`, `demo_tta.py`, and `app.py` (including Detectron2 and DeepLabCut).
 
+### Clean install from this repository
+
+Use these when developing from a **git clone** (not the PyPI wheel). The shell scripts are **non-interactive** (pip uses `--no-input`; `GIT_TERMINAL_PROMPT=0` for git). Put Hugging Face credentials in your environment or git credential helper before pushing the Space.
+
+**Local (fresh venv, LFS assets, Hub demo weights, smoke test)** — requires **Python 3.10+**
+(Gradio 5.1+ / Space-provided Gradio 6.x and `app.py` type hints). On macOS without `python3.10` on your `PATH`, install
+`brew install python@3.10` and set `PRIMA_PYTHON=/opt/homebrew/bin/python3.10`.
+
+```bash
+chmod +x scripts/clean_install_local.sh scripts/clean_redeploy_hf_space.sh scripts/deploy_hf_space.sh
+PRIMA_PYTHON=/opt/homebrew/bin/python3.10 ./scripts/clean_install_local.sh
+```
+
+Options:
+
+- `PRIMA_VENV=.venv ./scripts/clean_install_local.sh --skip-data` — skip the large `setup_demo_data` download if `data/` is already populated.
+- `./scripts/clean_install_local.sh --wipe-data --force-data` — delete downloaded `data/` assets and redownload.
+- `./scripts/clean_install_local.sh --no-editable` — only `requirements.txt` (no `pip install -e .`); use if editable install fails and you will install the training stack via conda as in the PyPI section above. You still need **Python 3.10+** for Gradio 5.1+. The smoke test sets `PYTHONPATH` to the repo root so `import prima` works without an editable install.
+- **macOS:** the script omits the `deeplabcut` line from `pip install` because DeepLabCut’s pinned PyTables version often does not build on Apple Silicon. Use conda/mamba for DeepLabCut if you need SuperAnimal + TTA (`tta_num_iters` &gt; 0). **Linux** (including Hugging Face Space builds) uses the full `requirements.txt` including `deeplabcut`.
+
+After `requirements.txt`, the script runs **`pip install --no-deps -e .`** so the `prima` package is registered without re-resolving `pyproject.toml` (which would pull **Detectron2** and **DeepLabCut** again and often fail on macOS). Full `pip install -e .` is still recommended from a **conda** environment per the PyPI section if you need every training extra matched exactly.
+
+**Hugging Face Space (full redeploy from your working tree):**
+
+Requires [Git LFS / Xet](https://huggingface.co/docs/hub/xet/using-xet-storage#git) tooling (`brew install git-lfs git-xet`, `git xet install`, `git lfs install`). Then:
+
+```bash
+./scripts/clean_redeploy_hf_space.sh
+```
+
+This is equivalent to `./scripts/deploy_hf_space.sh` and force-pushes a fresh snapshot to the Space.
+
 ---
 
 ## Demo
@@ -152,10 +184,12 @@ git xet install
 git lfs install
 ```
 
-Then from a clean checkout with LFS files present, deploy the Space repo:
+Then from a clean checkout with LFS files present, redeploy the Space (same as `clean_redeploy_hf_space.sh`):
 
 ```bash
 ./scripts/deploy_hf_space.sh
+# or
+./scripts/clean_redeploy_hf_space.sh
 ```
 
 The script rsyncs the working tree (not `git archive`) so image files are materialized

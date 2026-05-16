@@ -57,13 +57,9 @@ dependencies = [
 
   # IO / misc
   "gdown==5.2.0",
-  "gradio==5.1.0",
-  "pydantic==2.10.6",
-
-  # Web stack for Gradio demo
-  "fastapi==0.110.0",
-  "starlette==0.36.3",
-  "jinja2==3.1.4",
+  # Match HF Space (Gradio 6.x) and local demo; do not pin 5.1 — Space injects gradio==6.x.
+  "gradio>=5.1,<7",
+  "pydantic>=2.10,<3",
 
   # Training framework
   "pytorch-lightning==2.5.5",

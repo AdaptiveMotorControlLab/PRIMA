@@ -1,6 +1,10 @@
 huggingface_hub<1
 torch==2.2.1
 torchvision==0.17.1
+# Do not pin gradio here: Hugging Face Spaces runs
+#   pip install -r requirements.txt gradio[oauth,mcp]==6.x ...
+# and a pinned older gradio causes ResolutionImpossible. Local installs get Gradio from
+# scripts/clean_install_local.sh after this file, or from pyproject.toml for editable installs.
 deeplabcut
 pytorch-lightning==2.5.5
 yacs==0.1.8
