@@ -40,6 +40,7 @@ from tqdm import tqdm
 from prima.models import load_prima
 from prima.utils import recursive_to
 from prima.datasets.vitdet_dataset import ViTDetDataset, DEFAULT_MEAN, DEFAULT_STD
+from prima.utils.detection import ANIMAL_COCO_IDS, select_animal_boxes
 from prima.utils.weights import DEFAULT_HF_REPO_ID, resolve_prima_checkpoint_path
 
 warnings.filterwarnings("ignore")
@@ -47,7 +48,6 @@ warnings.filterwarnings("ignore")
 LIGHT_BLUE = (0.65098039, 0.74117647, 0.85882353)
 GREEN = (0.65, 0.86, 0.74)
 
-ANIMAL_COCO_IDS = [15, 16, 17, 18, 19, 21, 22]
 REPO_ROOT = Path(__file__).resolve().parent
 
 
@@ -310,11 +310,13 @@ def main():
             continue
         det_out = detector(img_bgr)
         det_instances = det_out['instances']
-        valid_idx = [
-            i for i, (c, s) in enumerate(zip(det_instances.pred_classes, det_instances.scores))
-            if (int(c) in ANIMAL_COCO_IDS) and (float(s) > args.det_thresh)
-        ]
-        boxes = det_instances.pred_boxes.tensor[valid_idx].cpu().numpy()
+        boxes, suppressed = select_animal_boxes(
+            det_instances,
+            animal_class_ids=ANIMAL_COCO_IDS,
+            score_threshold=args.det_thresh,
+        )
+        if suppressed > 0:
+            print(f"[INFO] Suppressed {suppressed} duplicate animal detection(s) in {img_path}")
 
         if len(boxes) == 0:
             print(f"[INFO] No animal detected in {img_path}")
