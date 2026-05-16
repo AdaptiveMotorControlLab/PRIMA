@@ -5,7 +5,9 @@ Official implementation of the paper:
 "PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation"
 by Xiaohang Yu, Ti Wang, and Mackenzie Weygandt Mathis
 Licensed under a modified MIT license
+"""
 
+"""
 demo_tta.py: PRIMA inference with fine-tuned DeepLabCut SuperAnimal TTA
 
 Pipeline:
