@@ -136,6 +136,7 @@ def run_superanimal_on_patch(patch_rgb: np.ndarray, args, tmp_dir: str):
     patch_path = os.path.join(tmp_dir, "patch.png")
     cv2.imwrite(patch_path, cv2.cvtColor((patch_rgb * 255).astype(np.uint8), cv2.COLOR_RGB2BGR))
 
+    dlc_device = "cuda" if torch.cuda.is_available() else "cpu"
     preds = superanimal_analyze_images(
         superanimal_name=args.superanimal_name,
         model_name=args.superanimal_model_name,
@@ -143,6 +144,7 @@ def run_superanimal_on_patch(patch_rgb: np.ndarray, args, tmp_dir: str):
         images=patch_path,
         max_individuals=args.superanimal_max_individuals,
         out_folder=tmp_dir,
+        device=dlc_device,
         customized_model_config=args.pytorch_config_2d_path,
         customized_pose_checkpoint=args.saved_2d_model_path,
     )
