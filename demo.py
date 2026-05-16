@@ -21,6 +21,7 @@ import torch.utils.data
 from prima.models import load_prima
 from prima.utils import recursive_to
 from prima.datasets.vitdet_dataset import ViTDetDataset, DEFAULT_MEAN, DEFAULT_STD
+from prima.utils.detection import select_animal_boxes
 from prima.utils.weights import DEFAULT_HF_REPO_ID, resolve_prima_checkpoint_path
 import detectron2
 from detectron2 import model_zoo
@@ -95,17 +96,26 @@ def main():
     detector = detectron2.engine.DefaultPredictor(cfg)
 
     img_paths = sorted([img for end in args.file_type for img in Path(args.img_folder).glob(end)])
+    num_readable_images = 0
+    num_rendered_results = 0
+    num_suppressed_detections = 0
     for img_path in img_paths:
         img_bgr = cv2.imread(str(img_path))
         if img_bgr is None:
             print(f"[WARN] Cannot read image: {img_path}")
             continue
+        num_readable_images += 1
         # Detect animals in image
         det_out = detector(img_bgr)
 
         det_instances = det_out['instances']
-        valid_idx = [i for i, (c, s) in enumerate(zip(det_instances.pred_classes, det_instances.scores)) if ((c in [15, 16, 17, 18, 19, 21, 22]) & (s > 0.7))]
-        boxes = det_instances.pred_boxes.tensor[valid_idx].cpu().numpy()
+        boxes, suppressed = select_animal_boxes(det_instances, score_threshold=0.7)
+        num_suppressed_detections += suppressed
+        if suppressed > 0:
+            print(f"[INFO] Suppressed {suppressed} duplicate animal detection(s) in {img_path}")
+        if len(boxes) == 0:
+            print(f"[INFO] No animal detected in {img_path}")
+            continue
 
         # Run PRIMA on detected animals
         dataset = ViTDetDataset(model_cfg, img_bgr, boxes)
@@ -155,6 +165,7 @@ def main():
 
                 cv2.imwrite(os.path.join(args.out_folder, f'{img_fn}_{animal_id}.png'), 
                             cv2.cvtColor((255 * final_img).astype(np.uint8), cv2.COLOR_RGB2BGR))
+                num_rendered_results += 1
 
                 # Add all verts and cams to list
                 verts = out['pred_vertices'][n].detach().cpu().numpy()
@@ -165,6 +176,13 @@ def main():
                     camera_translation = cam_t.copy()
                     tmesh = renderer.vertices_to_trimesh(verts, camera_translation, LIGHT_BLUE)
                     tmesh.export(os.path.join(args.out_folder, f'{img_fn}_{animal_id}.obj'))
+
+    print(
+        f"[done] Demo complete. Processed {num_readable_images}/{len(img_paths)} image(s), "
+        f"saved {num_rendered_results} rendered result(s) to {args.out_folder}."
+    )
+    if num_suppressed_detections > 0:
+        print(f"[done] Suppressed {num_suppressed_detections} duplicate animal detection(s).")
 
 
 if __name__ == '__main__':
