@@ -5,9 +5,7 @@ Official implementation of the paper:
 "PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation"
 by Xiaohang Yu, Ti Wang, and Mackenzie Weygandt Mathis
 Licensed under a modified MIT license
-"""
 
-"""
 demo_tta.py: PRIMA inference with fine-tuned DeepLabCut SuperAnimal TTA
 
 Pipeline:
@@ -22,8 +20,6 @@ Pipeline:
    to further optimize the 3D pose and shape estimation.
 5. Render and save before/after TTA results (PNG + OBJ) and the
    26-keypoint visualization (PNG).
-
-Reference: FMPose3D/animals/demo/vis_animals.py
 """
 
 
@@ -44,7 +40,6 @@ from tqdm import tqdm
 from prima.models import load_prima
 from prima.utils import recursive_to
 from prima.datasets.vitdet_dataset import ViTDetDataset, DEFAULT_MEAN, DEFAULT_STD
-from prima.utils.renderer import Renderer, cam_crop_to_full
 from prima.utils.weights import DEFAULT_HF_REPO_ID, resolve_prima_checkpoint_path
 
 warnings.filterwarnings("ignore")
@@ -54,6 +49,19 @@ GREEN = (0.65, 0.86, 0.74)
 
 ANIMAL_COCO_IDS = [15, 16, 17, 18, 19, 21, 22]
 REPO_ROOT = Path(__file__).resolve().parent
+
+
+def load_renderer_components():
+    try:
+        from prima.utils.renderer import Renderer, cam_crop_to_full
+    except Exception as exc:
+        raise RuntimeError(
+            "Cannot initialize the PRIMA renderer. Rendering requires a working "
+            "pyrender/OpenGL backend such as EGL or OSMesa. Install the missing "
+            "OpenGL runtime for this environment, or run in an environment where "
+            "PYOPENGL_PLATFORM=egl/osmesa works."
+        ) from exc
+    return Renderer, cam_crop_to_full
 
 
 def denorm_patch_to_rgb(img_tensor: torch.Tensor) -> np.ndarray:
@@ -101,8 +109,14 @@ def resolve_sa_weights_path(local_path: str) -> str:
         ) from None
     repo_id = "MLAdaptiveIntelligence/FMPose3D"
     filename = "sa_finetune_hrnet_w32.pt"
-    print(f"No --saved_2d_model_path provided; downloading '{filename}' from {repo_id}...")
-    return hf_hub_download(repo_id=repo_id, filename=filename)
+    try:
+        cached_path = hf_hub_download(repo_id=repo_id, filename=filename, local_files_only=True)
+    except Exception:
+        print(f"No --saved_2d_model_path provided; downloading '{filename}' from {repo_id}...")
+        return hf_hub_download(repo_id=repo_id, filename=filename)
+
+    print(f"Using cached SuperAnimal weights: {cached_path}")
+    return cached_path
 
 
 def run_superanimal_on_patch(patch_rgb: np.ndarray, args, tmp_dir: str):
@@ -144,13 +158,13 @@ def run_superanimal_on_patch(patch_rgb: np.ndarray, args, tmp_dir: str):
     return bodyparts[best_idx].astype(np.float32)
 
 
-def render_and_save(renderer, out, batch, img_fn, animal_id, out_folder, suffix, side_view, save_mesh):
+def render_and_save(renderer, cam_crop_to_full_fn, out, batch, img_fn, animal_id, out_folder, suffix, side_view, save_mesh):
     pred_cam = out['pred_cam']
     box_center = batch['box_center'].float()
     box_size = batch['box_size'].float()
     img_size = batch['img_size'].float()
     scaled_focal_length = batch['focal_length'][0, 0] / batch['img'].shape[-1] * img_size.max()
-    pred_cam_t_full = cam_crop_to_full(pred_cam, box_center, box_size, img_size, scaled_focal_length)
+    pred_cam_t_full = cam_crop_to_full_fn(pred_cam, box_center, box_size, img_size, scaled_focal_length)
 
     white_img = (torch.ones_like(batch['img'][0]).cpu() - DEFAULT_MEAN[:, None, None] / 255) / (
         DEFAULT_STD[:, None, None] / 255
@@ -269,6 +283,7 @@ def main():
     model = model.to(device)
     model.eval()
 
+    Renderer, cam_crop_to_full_fn = load_renderer_components()
     renderer = Renderer(model_cfg, faces=model.smal.faces)
     os.makedirs(args.out_folder, exist_ok=True)
 
@@ -318,6 +333,7 @@ def main():
 
             render_and_save(
                 renderer,
+                cam_crop_to_full_fn,
                 out_before,
                 batch,
                 img_fn,
@@ -361,6 +377,7 @@ def main():
 
             render_and_save(
                 renderer,
+                cam_crop_to_full_fn,
                 out_after,
                 batch,
                 img_fn,
