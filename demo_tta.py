@@ -8,24 +8,20 @@ Licensed under a modified MIT license
 """
 
 """
-demo_tta.py: PRIMA inference with DeepLabCut SuperAnimal TTA
+demo_tta.py: PRIMA inference with fine-tuned DeepLabCut SuperAnimal TTA
 
 Pipeline:
 1. Run Detectron2 to detect animals in the input image.
 2. Run PRIMA on each detected animal to obtain 3D pose/shape estimation.
-3. Run DeepLabCut SuperAnimal to obtain 2D keypoint estimation.
-4. Map the 39 SuperAnimal keypoints to the 26 PRIMA keypoints.
-5. Run test-time adaptation (TTA) with user-specified lr and num_iters
+3. Run a fine-tuned DeepLabCut SuperAnimal pose model (Animal3D 26-joint
+   layout) to obtain 2D keypoints already in PRIMA topology. The fine-tuned
+   snapshot is wired into DLC's
+   ``superanimal_analyze_images`` via the ``customized_pose_checkpoint``
+   and ``customized_model_config`` kwargs.
+4. Run test-time adaptation (TTA) with user-specified lr and num_iters
    to further optimize the 3D pose and shape estimation.
-6. Render and save before/after TTA results (PNG + OBJ) and the
+5. Render and save before/after TTA results (PNG + OBJ) and the
    26-keypoint visualization (PNG).
-
-Reference code:
-- Test-time adaptation: prima/../eval_with_tta.py
-- DeepLabCut: https://github.com/AdaptiveMotorControlLab/FMPose3D/blob/main/animals/demo/vis_animals.py
-- Keypoint mapping (SuperAnimal 39 → PRIMA 26):
-    keypoint_mapping = {"quadruped80k":[10, 5, -1, 26, 29, 30, 35, 22, 24, 27, 31, 32, -1, -1,
-                                     25, 28, 33, 34, 15, 23, 11, 6, 4, 3, 0, -1]}
 """
 
 
@@ -46,35 +42,34 @@ from tqdm import tqdm
 from prima.models import load_prima
 from prima.utils import recursive_to
 from prima.datasets.vitdet_dataset import ViTDetDataset, DEFAULT_MEAN, DEFAULT_STD
-from prima.utils.renderer import Renderer, cam_crop_to_full
+from prima.utils.detection import ANIMAL_COCO_IDS, select_animal_boxes
+from prima.utils.weights import DEFAULT_HF_REPO_ID, resolve_prima_checkpoint_path
 
 warnings.filterwarnings("ignore")
 
 LIGHT_BLUE = (0.65098039, 0.74117647, 0.85882353)
 GREEN = (0.65, 0.86, 0.74)
 
-ANIMAL_COCO_IDS = [15, 16, 17, 18, 19, 21, 22]
-keypoint_mapping = {
-    "quadruped80k": [10, 5, -1, 26, 29, 30, 35, 22, 24, 27, 31, 32, -1, -1, 25, 28, 33, 34, 15, 23, 11, 6, 4, 3, 0, -1]
-}
+REPO_ROOT = Path(__file__).resolve().parent
+
+
+def load_renderer_components():
+    try:
+        from prima.utils.renderer import Renderer, cam_crop_to_full
+    except Exception as exc:
+        raise RuntimeError(
+            "Cannot initialize the PRIMA renderer. Rendering requires a working "
+            "pyrender/OpenGL backend such as EGL or OSMesa. Install the missing "
+            "OpenGL runtime for this environment, or run in an environment where "
+            "PYOPENGL_PLATFORM=egl/osmesa works."
+        ) from exc
+    return Renderer, cam_crop_to_full
 
 
 def denorm_patch_to_rgb(img_tensor: torch.Tensor) -> np.ndarray:
     patch = (img_tensor.detach().cpu() * (DEFAULT_STD[:, None, None]) + DEFAULT_MEAN[:, None, None]) / 255.0
     patch = patch.permute(1, 2, 0).numpy()
     return np.clip(patch, 0.0, 1.0)
-
-
-def map_superanimal_to_prima(bodyparts_xyc: np.ndarray) -> np.ndarray:
-    mapping = keypoint_mapping["quadruped80k"]
-    num_src = bodyparts_xyc.shape[0]
-    mapped = np.zeros((len(mapping), 3), dtype=np.float32)
-
-    for tgt_i, src_i in enumerate(mapping):
-        if src_i >= 0 and src_i < num_src:
-            mapped[tgt_i] = bodyparts_xyc[src_i]
-
-    return mapped
 
 
 def save_keypoint_vis(patch_rgb: np.ndarray, kpts_xyc: np.ndarray, save_path: str) -> None:
@@ -97,7 +92,42 @@ def save_keypoint_vis(patch_rgb: np.ndarray, kpts_xyc: np.ndarray, save_path: st
     cv2.imwrite(save_path, vis)
 
 
+def resolve_sa_weights_path(local_path: str) -> str:
+    """Return a local path to the fine-tuned SuperAnimal .pt snapshot.
+
+    If ``local_path`` is empty, downloads ``sa_finetune_hrnet_w32.pt`` from the
+    ``MLAdaptiveIntelligence/FMPose3D`` Hugging Face repo (cached under
+    ``~/.cache/huggingface``).
+    """
+    if local_path:
+        return local_path
+    try:
+        from huggingface_hub import hf_hub_download
+    except ImportError:
+        raise ImportError(
+            "huggingface_hub is required to auto-download the fine-tuned "
+            "SuperAnimal weights. Install with `pip install huggingface_hub`, "
+            "or pass --saved_2d_model_path with a local .pt file."
+        ) from None
+    repo_id = "MLAdaptiveIntelligence/FMPose3D"
+    filename = "sa_finetune_hrnet_w32.pt"
+    try:
+        cached_path = hf_hub_download(repo_id=repo_id, filename=filename, local_files_only=True)
+    except Exception:
+        print(f"No --saved_2d_model_path provided; downloading '{filename}' from {repo_id}...")
+        return hf_hub_download(repo_id=repo_id, filename=filename)
+
+    print(f"Using cached SuperAnimal weights: {cached_path}")
+    return cached_path
+
+
 def run_superanimal_on_patch(patch_rgb: np.ndarray, args, tmp_dir: str):
+    """Predict 26-joint 2D keypoints on a single PRIMA patch using a
+    fine-tuned DeepLabCut SuperAnimal snapshot.
+
+    Returns an ``(26, 3)`` array of ``(x, y, confidence)`` in patch
+    pixel coordinates, or ``None`` if no individual was detected.
+    """
     try:
         from deeplabcut.pose_estimation_pytorch.apis import superanimal_analyze_images
     except Exception as e:
@@ -108,13 +138,17 @@ def run_superanimal_on_patch(patch_rgb: np.ndarray, args, tmp_dir: str):
     patch_path = os.path.join(tmp_dir, "patch.png")
     cv2.imwrite(patch_path, cv2.cvtColor((patch_rgb * 255).astype(np.uint8), cv2.COLOR_RGB2BGR))
 
+    dlc_device = "cuda" if torch.cuda.is_available() else "cpu"
     preds = superanimal_analyze_images(
-        args.superanimal_name,
-        args.superanimal_model_name,
-        args.superanimal_detector_name,
-        patch_path,
-        args.superanimal_max_individuals,
+        superanimal_name=args.superanimal_name,
+        model_name=args.superanimal_model_name,
+        detector_name=args.superanimal_detector_name,
+        images=patch_path,
+        max_individuals=args.superanimal_max_individuals,
         out_folder=tmp_dir,
+        device=dlc_device,
+        customized_model_config=args.pytorch_config_2d_path,
+        customized_pose_checkpoint=args.saved_2d_model_path,
     )
 
     payload = preds.get(patch_path, None)
@@ -125,16 +159,16 @@ def run_superanimal_on_patch(patch_rgb: np.ndarray, args, tmp_dir: str):
         return None
 
     best_idx = int(np.argmax(bodyparts[..., 2].mean(axis=1)))
-    return bodyparts[best_idx]
+    return bodyparts[best_idx].astype(np.float32)
 
 
-def render_and_save(renderer, out, batch, img_fn, animal_id, out_folder, suffix, side_view, save_mesh):
+def render_and_save(renderer, cam_crop_to_full_fn, out, batch, img_fn, animal_id, out_folder, suffix, side_view, save_mesh):
     pred_cam = out['pred_cam']
     box_center = batch['box_center'].float()
     box_size = batch['box_size'].float()
     img_size = batch['img_size'].float()
     scaled_focal_length = batch['focal_length'][0, 0] / batch['img'].shape[-1] * img_size.max()
-    pred_cam_t_full = cam_crop_to_full(pred_cam, box_center, box_size, img_size, scaled_focal_length)
+    pred_cam_t_full = cam_crop_to_full_fn(pred_cam, box_center, box_size, img_size, scaled_focal_length)
 
     white_img = (torch.ones_like(batch['img'][0]).cpu() - DEFAULT_MEAN[:, None, None] / 255) / (
         DEFAULT_STD[:, None, None] / 255
@@ -207,7 +241,13 @@ def tta_optimize(model, batch, gt_kpts_norm, num_iters, lr):
 
 def main():
     parser = argparse.ArgumentParser(description='PRIMA + SuperAnimal + TTA demo')
-    parser.add_argument('--checkpoint', type=str, required=True, help='Path to pretrained PRIMA checkpoint')
+    parser.add_argument('--checkpoint', type=str, default='',
+                        help='Path to pretrained PRIMA checkpoint. Empty -> auto-download the default Stage 1 checkpoint.')
+    parser.add_argument('--hf-repo-id', '--hf_repo_id', dest='hf_repo_id',
+                        type=str, default=os.environ.get("PRIMA_HF_REPO_ID", DEFAULT_HF_REPO_ID),
+                        help='Hugging Face repo ID containing PRIMA demo assets')
+    parser.add_argument('--no-auto-download', '--no_auto_download', dest='no_auto_download', action='store_true',
+                        help='Disable automatic download of missing PRIMA demo assets')
     parser.add_argument('--img_path', type=str, default=None, help='Single image path')
     parser.add_argument('--img_folder', type=str, default='demo_data/', help='Folder with input images')
     parser.add_argument('--out_folder', type=str, default='demo_out_tta', help='Output folder')
@@ -224,14 +264,30 @@ def main():
     parser.add_argument('--superanimal_model_name', type=str, default='hrnet_w32')
     parser.add_argument('--superanimal_detector_name', type=str, default='fasterrcnn_resnet50_fpn_v2')
     parser.add_argument('--superanimal_max_individuals', type=int, default=1)
+    parser.add_argument('--saved_2d_model_path', type=str, default='',
+                        help='Path to the fine-tuned SuperAnimal 26-joint .pt snapshot. '
+                             'Empty -> auto-download sa_finetune_hrnet_w32.pt from '
+                             'MLAdaptiveIntelligence/FMPose3D on Hugging Face Hub.')
+    parser.add_argument('--pytorch_config_2d_path', type=str,
+                        default=str(Path(__file__).resolve().parent / 'configs' / 'sa_finetune_hrnet_w32.yaml'),
+                        help='Path to the DLC pytorch config yaml for the fine-tuned snapshot. '
+                             'Defaults to the bundled configs/sa_finetune_hrnet_w32.yaml.')
 
     args = parser.parse_args()
+    checkpoint_path = resolve_prima_checkpoint_path(
+        args.checkpoint,
+        data_dir=REPO_ROOT / "data",
+        auto_download=not args.no_auto_download,
+        hf_repo_id=args.hf_repo_id,
+    )
+    args.saved_2d_model_path = resolve_sa_weights_path(args.saved_2d_model_path)
 
-    model, model_cfg = load_prima(args.checkpoint)
+    model, model_cfg = load_prima(checkpoint_path)
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     model = model.to(device)
     model.eval()
 
+    Renderer, cam_crop_to_full_fn = load_renderer_components()
     renderer = Renderer(model_cfg, faces=model.smal.faces)
     os.makedirs(args.out_folder, exist_ok=True)
 
@@ -243,6 +299,7 @@ def main():
     cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml"))
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5
     cfg.MODEL.WEIGHTS = "https://dl.fbaipublicfiles.com/detectron2/COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x/139173657/model_final_68b088.pkl"
+    cfg.MODEL.DEVICE = device.type
     detector = detectron2.engine.DefaultPredictor(cfg)
 
     if args.img_path is not None:
@@ -257,11 +314,13 @@ def main():
             continue
         det_out = detector(img_bgr)
         det_instances = det_out['instances']
-        valid_idx = [
-            i for i, (c, s) in enumerate(zip(det_instances.pred_classes, det_instances.scores))
-            if (int(c) in ANIMAL_COCO_IDS) and (float(s) > args.det_thresh)
-        ]
-        boxes = det_instances.pred_boxes.tensor[valid_idx].cpu().numpy()
+        boxes, suppressed = select_animal_boxes(
+            det_instances,
+            animal_class_ids=ANIMAL_COCO_IDS,
+            score_threshold=args.det_thresh,
+        )
+        if suppressed > 0:
+            print(f"[INFO] Suppressed {suppressed} duplicate animal detection(s) in {img_path}")
 
         if len(boxes) == 0:
             print(f"[INFO] No animal detected in {img_path}")
@@ -280,6 +339,7 @@ def main():
 
             render_and_save(
                 renderer,
+                cam_crop_to_full_fn,
                 out_before,
                 batch,
                 img_fn,
@@ -292,27 +352,26 @@ def main():
 
             patch_rgb = denorm_patch_to_rgb(batch['img'][0])
             with tempfile.TemporaryDirectory(prefix=f"dlc_{img_fn}_{animal_id}_") as tmp_dir:
-                bodyparts_xyc = run_superanimal_on_patch(patch_rgb, args, tmp_dir)
+                kpts_xyc = run_superanimal_on_patch(patch_rgb, args, tmp_dir)
 
-            if bodyparts_xyc is None:
+            if kpts_xyc is None:
                 print(f"[WARN] No SuperAnimal keypoints for {img_fn}_{animal_id}, skip TTA")
                 continue
 
-            mapped_xyc = map_superanimal_to_prima(bodyparts_xyc)
-            mapped_xyc[mapped_xyc[:, 2] < args.kp_conf_thresh, 2] = 0.0
+            kpts_xyc[kpts_xyc[:, 2] < args.kp_conf_thresh, 2] = 0.0
 
             save_keypoint_vis(
                 patch_rgb,
-                mapped_xyc,
+                kpts_xyc,
                 os.path.join(args.out_folder, f"{img_fn}_{animal_id}_prima26_kpts.png"),
             )
-            np.save(os.path.join(args.out_folder, f"{img_fn}_{animal_id}_prima26_kpts.npy"), mapped_xyc)
+            np.save(os.path.join(args.out_folder, f"{img_fn}_{animal_id}_prima26_kpts.npy"), kpts_xyc)
 
             patch_h, patch_w = patch_rgb.shape[:2]
-            mapped_norm = mapped_xyc.copy()
-            mapped_norm[:, 0] = mapped_norm[:, 0] / float(patch_w) - 0.5
-            mapped_norm[:, 1] = mapped_norm[:, 1] / float(patch_h) - 0.5
-            gt_kpts_norm = torch.from_numpy(mapped_norm[None]).to(device=device, dtype=batch['img'].dtype)
+            kpts_norm = kpts_xyc.copy()
+            kpts_norm[:, 0] = kpts_norm[:, 0] / float(patch_w) - 0.5
+            kpts_norm[:, 1] = kpts_norm[:, 1] / float(patch_h) - 0.5
+            gt_kpts_norm = torch.from_numpy(kpts_norm[None]).to(device=device, dtype=batch['img'].dtype)
 
             out_after = tta_optimize(
                 model,
@@ -324,6 +383,7 @@ def main():
 
             render_and_save(
                 renderer,
+                cam_crop_to_full_fn,
                 out_after,
                 batch,
                 img_fn,
@@ -337,4 +397,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

@@ -250,7 +250,7 @@ class Renderer:
         if return_rgba:
             return color
 
-        valid_mask = (color[:, :, -1])[:, :, np.newaxis]
+        valid_mask = (rend_depth > 0).astype(np.float32)[:, :, np.newaxis]
         if not side_view:
             output_img = (color[:, :, :3] * valid_mask + (1 - valid_mask) * image)
         else:

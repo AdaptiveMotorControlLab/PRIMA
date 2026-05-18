@@ -14,10 +14,10 @@ Gradio interface. The overall logic follows:
 
 1. Given an input image, run Detectron2 to detect animals.
 2. For each detected animal, run PRIMA for 3D pose/shape estimation.
-3. Run DeepLabCut SuperAnimal to obtain 2D keypoints.
-4. Map SuperAnimal 39 keypoints to the 26 PRIMA keypoints.
-5. Run test-time adaptation (TTA) with user-specified lr and iters.
-6. Render and save before/after TTA results and keypoint visualizations.
+3. Run the fine-tuned DeepLabCut SuperAnimal model to obtain PRIMA 26-keypoint
+   2D predictions.
+4. Run test-time adaptation (TTA) with user-specified lr and iters.
+5. Render and save before/after TTA results and keypoint visualizations.
 
 """
 
@@ -44,10 +44,16 @@ _REPO_ROOT = Path(__file__).resolve().parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from prima.utils.weights import (
+    DEFAULT_HF_REPO_ID,
+    resolve_prima_checkpoint_path,
+)
+from prima.utils.detection import select_animal_boxes
+
 
 # Default checkpoint path following README instructions
-DEFAULT_CHECKPOINT = "data/PRIMAS1/checkpoints/s1ckpt.ckpt"
-DEFAULT_HF_ASSET_REPO = "MLAdaptiveIntelligence/PRIMA"
+DEFAULT_CHECKPOINT = str(_REPO_ROOT / "data" / "PRIMAS1" / "checkpoints" / "s1ckpt_inference.ckpt")
+DEFAULT_HF_ASSET_REPO = DEFAULT_HF_REPO_ID
 
 # Output folder for rendered images/meshes and keypoints
 DEFAULT_OUT_FOLDER = "demo_out_tta_gradio"
@@ -74,8 +80,8 @@ def _gradio_examples_for_interface() -> List[List]:
         ("demo_data/000000015956_horse.png", 1e-6, 30, 0.7, 0.1, False, True),
         ("demo_data/n02412080_12159.png", 1e-6, 30, 0.7, 0.1, False, True),
         ("demo_data/000000315905_zebra.jpg", 1e-6, 30, 0.7, 0.1, False, True),
-        ("demo_data/beagle.jpg", 1e-6, 0, 0.7, 0.1, False, True),
-        ("demo_data/shepherd_hati.jpg", 1e-6, 0, 0.7, 0.1, False, True),
+        ("demo_data/beagle.jpg", 1e-6, 30, 0.7, 0.1, False, True),
+        ("demo_data/shepherd_hati.jpg", 1e-6, 30, 0.7, 0.1, False, True),
     ]
     for rel, *rest in template:
         p = _REPO_ROOT / rel
@@ -91,7 +97,6 @@ def _should_preload_assets() -> bool:
         return _is_truthy_env("PRIMA_PRELOAD_ASSETS")
     return _running_on_space()
 
-
 def _gradio_heartbeat_interval_sec() -> float:
     """How often to yield status while waiting on long CPU/GPU work (keeps WebSockets alive).
 
@@ -105,51 +110,30 @@ def _gradio_heartbeat_interval_sec() -> float:
     return max(0.0, v)
 
 
-def _ensure_demo_assets(checkpoint_path: str) -> None:
-    """Download required demo assets when running in a clean environment."""
-    from scripts.setup_demo_data import (
-        maybe_download_smal,
-        maybe_download_backbone,
-        maybe_download_stage,
-    )
-
-    checkpoint = Path(checkpoint_path)
-    data_dir = checkpoint.parents[2]
-    hf_repo_id = os.environ.get("PRIMA_HF_REPO_ID", DEFAULT_HF_ASSET_REPO)
-
-    maybe_download_smal(data_dir, force=False, hf_repo_id=hf_repo_id)
-    maybe_download_backbone(data_dir, force=False, hf_repo_id=hf_repo_id)
-    maybe_download_stage(
-        "PRIMAS1",
-        "config_s1_HYDRA.yaml",
-        "s1ckpt.ckpt",
-        "s1ckpt.ckpt",
-        data_dir,
-        force=False,
-        hf_repo_id=hf_repo_id,
-    )
-
-
 def _preload_assets_once(checkpoint_path: str) -> None:
-    checkpoint = Path(checkpoint_path)
-    cfg_path = checkpoint.parent.parent / ".hydra" / "config.yaml"
-    if checkpoint.exists() and cfg_path.exists():
-        print("[startup] Assets already present; skipping preload.")
-        return
-    print("[startup] Preloading demo assets from Hugging Face Hub...")
-    _ensure_demo_assets(checkpoint_path)
+    print("[startup] Ensuring demo assets from Hugging Face Hub...")
+    resolve_prima_checkpoint_path(
+        checkpoint_path,
+        data_dir=_REPO_ROOT / "data",
+        auto_download=True,
+        hf_repo_id=os.environ.get("PRIMA_HF_REPO_ID", DEFAULT_HF_ASSET_REPO),
+    )
     print("[startup] Asset preload complete.")
 
 
 def _load_prima_model(checkpoint_path: str = DEFAULT_CHECKPOINT):
     """Load PRIMA model and renderer once for the Gradio app."""
     from prima.models import load_prima
-    from prima.utils.renderer import Renderer
+    from prima.utils.renderer import Renderer, cam_crop_to_full
 
+    checkpoint_path = resolve_prima_checkpoint_path(
+        checkpoint_path,
+        data_dir=_REPO_ROOT / "data",
+        auto_download=True,
+        hf_repo_id=os.environ.get("PRIMA_HF_REPO_ID", DEFAULT_HF_ASSET_REPO),
+    )
     checkpoint = Path(checkpoint_path)
     cfg_path = checkpoint.parent.parent / ".hydra" / "config.yaml"
-    if not checkpoint.exists() or not cfg_path.exists():
-        _ensure_demo_assets(checkpoint_path)
     if not checkpoint.exists():
         raise FileNotFoundError(
             f"Missing checkpoint: {checkpoint}. Download demo checkpoints/data as described in README."
@@ -165,7 +149,7 @@ def _load_prima_model(checkpoint_path: str = DEFAULT_CHECKPOINT):
     model.eval()
 
     renderer = Renderer(model_cfg, faces=model.smal.faces)
-    return model, model_cfg, renderer, device
+    return model, model_cfg, renderer, cam_crop_to_full, device
 
 
 def _build_detector():
@@ -194,9 +178,9 @@ def _build_detector():
 
 def _load_model_and_detector_for_demo(checkpoint_path: str):
     """Run on a worker thread when using heartbeat polling (single entry point for executor)."""
-    model, model_cfg, renderer, device = _load_prima_model(checkpoint_path)
+    model, model_cfg, renderer, cam_crop_to_full_fn, device = _load_prima_model(checkpoint_path)
     detector = _build_detector()
-    return model, model_cfg, renderer, device, detector
+    return model, model_cfg, renderer, cam_crop_to_full_fn, device, detector
 
 
 # SuperAnimal defaults (same as in demo_tta parser)
@@ -205,6 +189,8 @@ SUPER_ANIMAL_ARGS = SimpleNamespace(
     superanimal_model_name="hrnet_w32",
     superanimal_detector_name="fasterrcnn_resnet50_fpn_v2",
     superanimal_max_individuals=1,
+    saved_2d_model_path="",
+    pytorch_config_2d_path=str(_REPO_ROOT / "configs" / "sa_finetune_hrnet_w32.yaml"),
 )
 
 
@@ -212,6 +198,7 @@ def _collect_animal_results(
     model,
     model_cfg,
     renderer,
+    cam_crop_to_full_fn,
     device,
     detector,
     out_folder: str,
@@ -235,13 +222,15 @@ def _collect_animal_results(
     from prima.utils import recursive_to
     from prima.datasets.vitdet_dataset import ViTDetDataset
     from demo_tta import (
-        ANIMAL_COCO_IDS,
         denorm_patch_to_rgb,
-        map_superanimal_to_prima,
+        resolve_sa_weights_path,
         run_superanimal_on_patch,
         save_keypoint_vis,
         tta_optimize,
     )
+
+    if int(tta_num_iters) > 0 and not SUPER_ANIMAL_ARGS.saved_2d_model_path:
+        SUPER_ANIMAL_ARGS.saved_2d_model_path = resolve_sa_weights_path("")
 
     # Detect animals
     img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
@@ -253,15 +242,11 @@ def _collect_animal_results(
         det_out = detector(img_bgr)
         det_instances = det_out["instances"]
 
-        valid_idx = [
-            i
-            for i, (c, s) in enumerate(zip(det_instances.pred_classes, det_instances.scores))
-            if (int(c) in ANIMAL_COCO_IDS) and (float(s) > float(det_thresh))
-        ]
-        if len(valid_idx) == 0:
+        boxes, suppressed = select_animal_boxes(det_instances, score_threshold=float(det_thresh))
+        if suppressed > 0:
+            print(f"[INFO] Suppressed {suppressed} duplicate animal detection(s)")
+        if len(boxes) == 0:
             return [], [], [], None, None
-
-        boxes = det_instances.pred_boxes.tensor[valid_idx].cpu().numpy()
 
     dataset = ViTDetDataset(model_cfg, img_bgr, boxes)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
@@ -288,6 +273,7 @@ def _collect_animal_results(
 
         render_and_save(
             renderer,
+            cam_crop_to_full_fn,
             out_before,
             batch,
             img_fn,
@@ -312,6 +298,7 @@ def _collect_animal_results(
         if int(tta_num_iters) <= 0:
             render_and_save(
                 renderer,
+                cam_crop_to_full_fn,
                 out_before,
                 batch,
                 img_fn,
@@ -343,14 +330,14 @@ def _collect_animal_results(
             # No keypoints => skip TTA for this animal
             continue
 
-        mapped_xyc = map_superanimal_to_prima(bodyparts_xyc)
-        mapped_xyc[mapped_xyc[:, 2] < float(kp_conf_thresh), 2] = 0.0
+        kpts_xyc = bodyparts_xyc
+        kpts_xyc[kpts_xyc[:, 2] < float(kp_conf_thresh), 2] = 0.0
 
         # Save keypoint visualization and npy
         kpt_png_path = os.path.join(out_folder, f"{img_fn}_{animal_id}_prima26_kpts.png")
-        save_keypoint_vis(patch_rgb, mapped_xyc, kpt_png_path)
+        save_keypoint_vis(patch_rgb, kpts_xyc, kpt_png_path)
         npy_path = os.path.join(out_folder, f"{img_fn}_{animal_id}_prima26_kpts.npy")
-        np.save(npy_path, mapped_xyc)
+        np.save(npy_path, kpts_xyc)
 
         if os.path.exists(kpt_png_path):
             kpt_bgr = cv2.imread(kpt_png_path)
@@ -359,10 +346,10 @@ def _collect_animal_results(
 
         # Normalize keypoints to [-0.5, 0.5] as in demo_tta
         patch_h, patch_w = patch_rgb.shape[:2]
-        mapped_norm = mapped_xyc.copy()
-        mapped_norm[:, 0] = mapped_norm[:, 0] / float(patch_w) - 0.5
-        mapped_norm[:, 1] = mapped_norm[:, 1] / float(patch_h) - 0.5
-        gt_kpts_norm = torch.from_numpy(mapped_norm[None]).to(device=device, dtype=batch["img"].dtype)
+        kpts_norm = kpts_xyc.copy()
+        kpts_norm[:, 0] = kpts_norm[:, 0] / float(patch_w) - 0.5
+        kpts_norm[:, 1] = kpts_norm[:, 1] / float(patch_h) - 0.5
+        gt_kpts_norm = torch.from_numpy(kpts_norm[None]).to(device=device, dtype=batch["img"].dtype)
 
         # Run TTA
         out_after = tta_optimize(
@@ -375,6 +362,7 @@ def _collect_animal_results(
 
         render_and_save(
             renderer,
+            cam_crop_to_full_fn,
             out_after,
             batch,
             img_fn,
@@ -408,6 +396,7 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
         "model": None,
         "model_cfg": None,
         "renderer": None,
+        "cam_crop_to_full_fn": None,
         "device": None,
         "detector": None,
     }
@@ -451,7 +440,7 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
             )
             try:
                 if hb <= 0:
-                    model, model_cfg, renderer, device, detector = _load_model_and_detector_for_demo(
+                    model, model_cfg, renderer, cam_crop_to_full_fn, device, detector = _load_model_and_detector_for_demo(
                         checkpoint_path
                     )
                 else:
@@ -460,7 +449,7 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
                         t0 = time.monotonic()
                         while True:
                             try:
-                                model, model_cfg, renderer, device, detector = fut.result(timeout=hb)
+                                model, model_cfg, renderer, cam_crop_to_full_fn, device, detector = fut.result(timeout=hb)
                                 break
                             except concurrent.futures.TimeoutError:
                                 elapsed = int(time.monotonic() - t0)
@@ -474,6 +463,7 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
             runtime_cache["model"] = model
             runtime_cache["model_cfg"] = model_cfg
             runtime_cache["renderer"] = renderer
+            runtime_cache["cam_crop_to_full_fn"] = cam_crop_to_full_fn
             runtime_cache["device"] = device
             runtime_cache["detector"] = detector
             yield None, None, None, "Model loaded. Running detection and inference…"
@@ -484,6 +474,7 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
                     runtime_cache["model"],
                     runtime_cache["model_cfg"],
                     runtime_cache["renderer"],
+                    runtime_cache["cam_crop_to_full_fn"],
                     runtime_cache["device"],
                     runtime_cache["detector"],
                     out_folder,
@@ -502,6 +493,7 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
                         runtime_cache["model"],
                         runtime_cache["model_cfg"],
                         runtime_cache["renderer"],
+                        runtime_cache["cam_crop_to_full_fn"],
                         runtime_cache["device"],
                         runtime_cache["detector"],
                         out_folder,

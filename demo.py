@@ -21,7 +21,8 @@ import torch.utils.data
 from prima.models import load_prima
 from prima.utils import recursive_to
 from prima.datasets.vitdet_dataset import ViTDetDataset, DEFAULT_MEAN, DEFAULT_STD
-from prima.utils.renderer import Renderer, cam_crop_to_full
+from prima.utils.detection import select_animal_boxes
+from prima.utils.weights import DEFAULT_HF_REPO_ID, resolve_prima_checkpoint_path
 import detectron2
 from detectron2 import model_zoo
 import warnings
@@ -29,13 +30,31 @@ warnings.filterwarnings("ignore")
 
 LIGHT_BLUE = (0.65098039, 0.74117647, 0.85882353)
 GREEN = (0.65, 0.86, 0.74)
+REPO_ROOT = Path(__file__).resolve().parent
 
+
+def load_renderer_components():
+    try:
+        from prima.utils.renderer import Renderer, cam_crop_to_full
+    except Exception as exc:
+        raise RuntimeError(
+            "Cannot initialize the PRIMA renderer. Rendering requires a working "
+            "pyrender/OpenGL backend such as EGL or OSMesa. Install the missing "
+            "OpenGL runtime for this environment, or run in an environment where "
+            "PYOPENGL_PLATFORM=egl/osmesa works."
+        ) from exc
+    return Renderer, cam_crop_to_full
 
 
 def main():
     parser = argparse.ArgumentParser(description='prima demo code')
-    parser.add_argument('--checkpoint', type=str,
-                        help='Path to pretrained model checkpoint')
+    parser.add_argument('--checkpoint', type=str, default='',
+                        help='Path to pretrained model checkpoint. Empty -> auto-download the default Stage 1 checkpoint.')
+    parser.add_argument('--hf-repo-id', '--hf_repo_id', dest='hf_repo_id',
+                        type=str, default=os.environ.get("PRIMA_HF_REPO_ID", DEFAULT_HF_REPO_ID),
+                        help='Hugging Face repo ID containing PRIMA demo assets')
+    parser.add_argument('--no-auto-download', '--no_auto_download', dest='no_auto_download', action='store_true',
+                        help='Disable automatic download of missing PRIMA demo assets')
     parser.add_argument('--img_folder', type=str, default='demo_data/', help='Folder with input images')
     parser.add_argument('--out_folder', type=str, default='demo_out', help='Output folder to save rendered results')
     parser.add_argument('--side_view', dest='side_view', action='store_true', default=False,
@@ -48,13 +67,21 @@ def main():
 
     args = parser.parse_args()
 
-    model, model_cfg = load_prima(args.checkpoint)
+    checkpoint_path = resolve_prima_checkpoint_path(
+        args.checkpoint,
+        data_dir=REPO_ROOT / "data",
+        auto_download=not args.no_auto_download,
+        hf_repo_id=args.hf_repo_id,
+    )
+
+    model, model_cfg = load_prima(checkpoint_path)
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     model = model.to(device)
     model.eval()
 
     # Setup the renderer
+    Renderer, cam_crop_to_full = load_renderer_components()
     renderer = Renderer(model_cfg, faces=model.smal.faces)
 
     # Make output directory if it does not exist
@@ -63,22 +90,32 @@ def main():
     # Load detector
     cfg = detectron2.config.get_cfg()
     cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml"))
-    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5 
-    cfg.MODEL.WEIGHTS = "https://dl.fbaipublicfiles.com/detectron2/COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x/139173657/model_final_68b088.pkl" 
+    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5
+    cfg.MODEL.WEIGHTS = "https://dl.fbaipublicfiles.com/detectron2/COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x/139173657/model_final_68b088.pkl"
+    cfg.MODEL.DEVICE = device.type
     detector = detectron2.engine.DefaultPredictor(cfg)
 
     img_paths = sorted([img for end in args.file_type for img in Path(args.img_folder).glob(end)])
+    num_readable_images = 0
+    num_rendered_results = 0
+    num_suppressed_detections = 0
     for img_path in img_paths:
         img_bgr = cv2.imread(str(img_path))
         if img_bgr is None:
             print(f"[WARN] Cannot read image: {img_path}")
             continue
+        num_readable_images += 1
         # Detect animals in image
         det_out = detector(img_bgr)
 
         det_instances = det_out['instances']
-        valid_idx = [i for i, (c, s) in enumerate(zip(det_instances.pred_classes, det_instances.scores)) if ((c in [15, 16, 17, 18, 19, 21, 22]) & (s > 0.7))]
-        boxes = det_instances.pred_boxes.tensor[valid_idx].cpu().numpy()
+        boxes, suppressed = select_animal_boxes(det_instances, score_threshold=0.7)
+        num_suppressed_detections += suppressed
+        if suppressed > 0:
+            print(f"[INFO] Suppressed {suppressed} duplicate animal detection(s) in {img_path}")
+        if len(boxes) == 0:
+            print(f"[INFO] No animal detected in {img_path}")
+            continue
 
         # Run PRIMA on detected animals
         dataset = ViTDetDataset(model_cfg, img_bgr, boxes)
@@ -128,6 +165,7 @@ def main():
 
                 cv2.imwrite(os.path.join(args.out_folder, f'{img_fn}_{animal_id}.png'), 
                             cv2.cvtColor((255 * final_img).astype(np.uint8), cv2.COLOR_RGB2BGR))
+                num_rendered_results += 1
 
                 # Add all verts and cams to list
                 verts = out['pred_vertices'][n].detach().cpu().numpy()
@@ -138,6 +176,13 @@ def main():
                     camera_translation = cam_t.copy()
                     tmesh = renderer.vertices_to_trimesh(verts, camera_translation, LIGHT_BLUE)
                     tmesh.export(os.path.join(args.out_folder, f'{img_fn}_{animal_id}.obj'))
+
+    print(
+        f"[done] Demo complete. Processed {num_readable_images}/{len(img_paths)} image(s), "
+        f"saved {num_rendered_results} rendered result(s) to {args.out_folder}."
+    )
+    if num_suppressed_detections > 0:
+        print(f"[done] Suppressed {num_suppressed_detections} duplicate animal detection(s).")
 
 
 if __name__ == '__main__':
