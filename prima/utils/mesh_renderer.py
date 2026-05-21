@@ -8,10 +8,11 @@ Licensed under a modified MIT license
 """
 
 import os
+from ctypes.util import find_library
 
 if 'PYOPENGL_PLATFORM' not in os.environ and os.uname().sysname != 'Darwin':
-    # Use software OpenGL in headless Linux environments (e.g., Hugging Face Spaces).
-    os.environ['PYOPENGL_PLATFORM'] = 'osmesa'
+    # Prefer OSMesa; fall back to EGL where available.
+    os.environ['PYOPENGL_PLATFORM'] = 'osmesa' if find_library('OSMesa') else 'egl'
 import torch
 from torchvision.utils import make_grid
 import numpy as np
