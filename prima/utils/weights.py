@@ -18,7 +18,7 @@ HF_REPO_ID = "MLAdaptiveIntelligence/PRIMA"
 DEFAULT_HF_REPO_ID = HF_REPO_ID
 
 DEFAULT_STAGE1_CHECKPOINT = Path("data/PRIMAS1/checkpoints/s1ckpt_inference.ckpt")
-DEFAULT_STAGE3_CHECKPOINT = Path("data/PRIMAS3/checkpoints/s3ckpt.ckpt")
+DEFAULT_STAGE3_CHECKPOINT = Path("data/PRIMAS3/checkpoints/s3ckpt_inference.ckpt")
 
 SMAL_ASSET_PATHS = [
     "my_smpl_00781_4_all.pkl",
@@ -29,16 +29,16 @@ BACKBONE_ASSET_PATH = "amr_vitbb.pth"
 STAGE1_CONFIG_ASSET_PATH = "config_s1_HYDRA.yaml"
 STAGE1_CHECKPOINT_ASSET_PATH = "s1ckpt_inference.ckpt"
 STAGE3_CONFIG_ASSET_PATH = "config_s3_HYDRA.yaml"
-STAGE3_CHECKPOINT_ASSET_PATH = "s3ckpt.ckpt"
+STAGE3_CHECKPOINT_ASSET_PATH = "s3ckpt_inference.ckpt"
 
 STAGE_ASSETS = {
     "PRIMAS1": (STAGE1_CONFIG_ASSET_PATH, STAGE1_CHECKPOINT_ASSET_PATH, "s1ckpt_inference.ckpt"),
-    "PRIMAS3": (STAGE3_CONFIG_ASSET_PATH, STAGE3_CHECKPOINT_ASSET_PATH, "s3ckpt.ckpt"),
+    "PRIMAS3": (STAGE3_CONFIG_ASSET_PATH, STAGE3_CHECKPOINT_ASSET_PATH, "s3ckpt_inference.ckpt"),
 }
 
 STAGE_CHECKPOINTS = {
     "PRIMAS1": Path("PRIMAS1/checkpoints/s1ckpt_inference.ckpt"),
-    "PRIMAS3": Path("PRIMAS3/checkpoints/s3ckpt.ckpt"),
+    "PRIMAS3": Path("PRIMAS3/checkpoints/s3ckpt_inference.ckpt"),
 }
 
 PathLike = Union[str, Path]
@@ -274,7 +274,7 @@ def _ensure_assets_for_checkpoint(
             f"  config: {config_path}\n"
             "Auto-download supports the standard PRIMA demo layouts only:\n"
             "  data/PRIMAS1/checkpoints/s1ckpt_inference.ckpt\n"
-            "  data/PRIMAS3/checkpoints/s3ckpt.ckpt\n"
+            "  data/PRIMAS3/checkpoints/s3ckpt_inference.ckpt\n"
             "Pass one of those paths, or download/copy your custom checkpoint manually."
         )
 
