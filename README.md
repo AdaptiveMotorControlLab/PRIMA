@@ -110,7 +110,7 @@ Expected files in that Hugging Face repo root:
 
 Optional Stage 3 prefetch expects:
 - `config_s3_HYDRA.yaml`
-- `s3ckpt.ckpt`
+- `s3ckpt_inference.ckpt`
 
 ### Demo (without TTA)
 
