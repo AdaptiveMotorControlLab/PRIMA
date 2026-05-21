@@ -25,6 +25,7 @@ def main(args):
     default_cfg = get_config(args.default_eval_config)
     model = PRIMA.load_from_checkpoint(args.checkpoint, cfg=cfg, strict=False)
     model.eval()
+    model = model.to(args.device)
 
     smal_evaluator = Evaluator(smal_model=model.smal, image_size=cfg.MODEL.IMAGE_SIZE)
     cfg_eval_dataset = dict(default_cfg.DATASETS)

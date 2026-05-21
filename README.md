@@ -1,14 +1,3 @@
----
-title: PRIMA Demo
-emoji: 🦮
-colorFrom: blue
-colorTo: green
-sdk: gradio
-python_version: "3.10"
-app_file: app.py
-startup_duration_timeout: 60m
----
-
 # PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation
 
 
@@ -121,7 +110,7 @@ Expected files in that Hugging Face repo root:
 
 Optional Stage 3 prefetch expects:
 - `config_s3_HYDRA.yaml`
-- `s3ckpt.ckpt`
+- `s3ckpt_inference.ckpt`
 
 ### Demo (without TTA)
 
@@ -229,6 +218,7 @@ This release builds on several open-source projects, including:
 - [BioCLIP](https://github.com/Imageomics/BioCLIP)
 - [AniMer](https://github.com/luoxue-star/AniMer)
 - [DeepLabCut](https://github.com/DeepLabCut/DeepLabCut)
+- [SAM3DB](https://github.com/facebookresearch/sam-3d-body)
 
 ---
 

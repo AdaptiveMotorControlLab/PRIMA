@@ -18,7 +18,7 @@ HF_REPO_ID = "MLAdaptiveIntelligence/PRIMA"
 DEFAULT_HF_REPO_ID = HF_REPO_ID
 
 DEFAULT_STAGE1_CHECKPOINT = Path("data/PRIMAS1/checkpoints/s1ckpt_inference.ckpt")
-DEFAULT_STAGE3_CHECKPOINT = Path("data/PRIMAS3/checkpoints/s3ckpt.ckpt")
+DEFAULT_STAGE3_CHECKPOINT = Path("data/PRIMAS3/checkpoints/s3ckpt_inference.ckpt")
 
 SMAL_ASSET_PATHS = [
     "my_smpl_00781_4_all.pkl",
@@ -29,16 +29,16 @@ BACKBONE_ASSET_PATH = "amr_vitbb.pth"
 STAGE1_CONFIG_ASSET_PATH = "config_s1_HYDRA.yaml"
 STAGE1_CHECKPOINT_ASSET_PATH = "s1ckpt_inference.ckpt"
 STAGE3_CONFIG_ASSET_PATH = "config_s3_HYDRA.yaml"
-STAGE3_CHECKPOINT_ASSET_PATH = "s3ckpt.ckpt"
+STAGE3_CHECKPOINT_ASSET_PATH = "s3ckpt_inference.ckpt"
 
 STAGE_ASSETS = {
     "PRIMAS1": (STAGE1_CONFIG_ASSET_PATH, STAGE1_CHECKPOINT_ASSET_PATH, "s1ckpt_inference.ckpt"),
-    "PRIMAS3": (STAGE3_CONFIG_ASSET_PATH, STAGE3_CHECKPOINT_ASSET_PATH, "s3ckpt.ckpt"),
+    "PRIMAS3": (STAGE3_CONFIG_ASSET_PATH, STAGE3_CHECKPOINT_ASSET_PATH, "s3ckpt_inference.ckpt"),
 }
 
 STAGE_CHECKPOINTS = {
     "PRIMAS1": Path("PRIMAS1/checkpoints/s1ckpt_inference.ckpt"),
-    "PRIMAS3": Path("PRIMAS3/checkpoints/s3ckpt.ckpt"),
+    "PRIMAS3": Path("PRIMAS3/checkpoints/s3ckpt_inference.ckpt"),
 }
 
 PathLike = Union[str, Path]
@@ -103,10 +103,42 @@ def _download_file(
 
 
 def _validate_torch_checkpoint(path: Path) -> None:
+    import inspect
+    import pickle
+    import zipfile
+
     import torch
 
+    if zipfile.is_zipfile(path):
+        with zipfile.ZipFile(path) as checkpoint_zip:
+            corrupt_member = checkpoint_zip.testzip()
+        if corrupt_member is not None:
+            raise RuntimeError(
+                f"Checkpoint file is invalid or incomplete: {path}\n"
+                f"Corrupt archive member: {corrupt_member}\n"
+                "Please redownload the checkpoint and try again."
+            )
+
+    supports_weights_only = "weights_only" in inspect.signature(torch.load).parameters
+    load_kwargs = {"map_location": "cpu"}
+    if supports_weights_only:
+        load_kwargs["weights_only"] = True
+
     try:
-        torch.load(path, map_location="cpu")
+        torch.load(path, **load_kwargs)
+    except pickle.UnpicklingError as exc:
+        message = str(exc)
+        if (
+            supports_weights_only
+            and "Weights only load failed" in message
+            and ("Unsupported global" in message or "Unsupported class" in message)
+        ):
+            return
+        raise RuntimeError(
+            f"Checkpoint file is invalid or incomplete: {path}\n"
+            "Downloaded checkpoint is not loadable. "
+            "Please verify the uploaded Hugging Face file and try again."
+        ) from exc
     except Exception as exc:
         raise RuntimeError(
             f"Checkpoint file is invalid or incomplete: {path}\n"
@@ -242,7 +274,7 @@ def _ensure_assets_for_checkpoint(
             f"  config: {config_path}\n"
             "Auto-download supports the standard PRIMA demo layouts only:\n"
             "  data/PRIMAS1/checkpoints/s1ckpt_inference.ckpt\n"
-            "  data/PRIMAS3/checkpoints/s3ckpt.ckpt\n"
+            "  data/PRIMAS3/checkpoints/s3ckpt_inference.ckpt\n"
             "Pass one of those paths, or download/copy your custom checkpoint manually."
         )
 
