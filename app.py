@@ -24,12 +24,13 @@ Gradio interface. The overall logic follows:
 import argparse
 import concurrent.futures
 import os
+import queue
 import sys
 import tempfile
 import time
 import traceback
 from types import SimpleNamespace
-from typing import List, Tuple
+from typing import Callable, List, Tuple
 from pathlib import Path
 
 import cv2
@@ -77,11 +78,11 @@ def _gradio_examples_for_interface() -> List[List]:
         return []
     rows: List[List] = []
     template: List[Tuple[str, float, int, float, float, bool, bool]] = [
-        ("demo_data/000000015956_horse.png", 1e-6, 30, 0.7, 0.1, False, True),
-        ("demo_data/n02412080_12159.png", 1e-6, 30, 0.7, 0.1, False, True),
-        ("demo_data/000000315905_zebra.jpg", 1e-6, 30, 0.7, 0.1, False, True),
-        ("demo_data/beagle.jpg", 1e-6, 30, 0.7, 0.1, False, True),
-        ("demo_data/shepherd_hati.jpg", 1e-6, 30, 0.7, 0.1, False, True),
+        ("demo_data/000000015956_horse.png", 1e-6, 0, 0.7, 0.1, False, True),
+        ("demo_data/n02412080_12159.png", 1e-6, 0, 0.7, 0.1, False, True),
+        ("demo_data/000000315905_zebra.jpg", 1e-6, 0, 0.7, 0.1, False, True),
+        ("demo_data/beagle.jpg", 1e-6, 0, 0.7, 0.1, False, True),
+        ("demo_data/shepherd_hati.jpg", 1e-6, 0, 0.7, 0.1, False, True),
     ]
     for rel, *rest in template:
         p = _REPO_ROOT / rel
@@ -209,6 +210,7 @@ def _collect_animal_results(
     kp_conf_thresh: float,
     side_view: bool,
     save_mesh: bool,
+    progress_callback: Callable[[str], None] | None = None,
 ) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray], str | None, str | None]:
     """Run detection + PRIMA + SuperAnimal + TTA on a single RGB image.
 
@@ -229,10 +231,16 @@ def _collect_animal_results(
         tta_optimize,
     )
 
+    def report(message: str) -> None:
+        if progress_callback is not None:
+            progress_callback(message)
+
     if int(tta_num_iters) > 0 and not SUPER_ANIMAL_ARGS.saved_2d_model_path:
+        report("Resolving SuperAnimal weights...")
         SUPER_ANIMAL_ARGS.saved_2d_model_path = resolve_sa_weights_path("")
 
     # Detect animals
+    report("Detecting animals...")
     img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
     if detector is None:
         # Fallback for environments where Detectron2 is unavailable: process full image as one crop.
@@ -248,6 +256,7 @@ def _collect_animal_results(
         if len(boxes) == 0:
             return [], [], [], None, None
 
+    report(f"Detected {len(boxes)} animal(s). Preparing crops...")
     dataset = ViTDetDataset(model_cfg, img_bgr, boxes)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
 
@@ -259,9 +268,11 @@ def _collect_animal_results(
 
     img_token = next(tempfile._get_candidate_names())
 
-    for batch in dataloader:
+    total_batches = len(dataloader)
+    for batch_idx, batch in enumerate(dataloader, start=1):
         batch = recursive_to(batch, device)
 
+        report(f"Animal {batch_idx}/{total_batches}: running PRIMA...")
         with torch.no_grad():
             out_before = model(batch)
 
@@ -271,6 +282,7 @@ def _collect_animal_results(
         img_fn = f"{img_token}"
         from demo_tta import render_and_save  # imported lazily to avoid circular issues
 
+        report(f"Animal {batch_idx}/{total_batches}: rendering before TTA...")
         render_and_save(
             renderer,
             cam_crop_to_full_fn,
@@ -296,6 +308,7 @@ def _collect_animal_results(
                 before_mesh_paths.append(before_obj_path)
 
         if int(tta_num_iters) <= 0:
+            report(f"Animal {batch_idx}/{total_batches}: rendering final output...")
             render_and_save(
                 renderer,
                 cam_crop_to_full_fn,
@@ -322,6 +335,7 @@ def _collect_animal_results(
             continue
 
         # Prepare patch for SuperAnimal
+        report(f"Animal {batch_idx}/{total_batches}: running SuperAnimal keypoints...")
         patch_rgb = denorm_patch_to_rgb(batch["img"][0])
         with tempfile.TemporaryDirectory(prefix=f"dlc_{img_fn}_{animal_id}_") as tmp_dir:
             bodyparts_xyc = run_superanimal_on_patch(patch_rgb, SUPER_ANIMAL_ARGS, tmp_dir)
@@ -352,6 +366,7 @@ def _collect_animal_results(
         gt_kpts_norm = torch.from_numpy(kpts_norm[None]).to(device=device, dtype=batch["img"].dtype)
 
         # Run TTA
+        report(f"Animal {batch_idx}/{total_batches}: running TTA ({int(tta_num_iters)} iterations)...")
         out_after = tta_optimize(
             model,
             batch,
@@ -360,6 +375,7 @@ def _collect_animal_results(
             lr=float(tta_lr),
         )
 
+        report(f"Animal {batch_idx}/{total_batches}: rendering after TTA...")
         render_and_save(
             renderer,
             cam_crop_to_full_fn,
@@ -387,6 +403,7 @@ def _collect_animal_results(
     first_before_mesh = before_mesh_paths[0] if before_mesh_paths else None
     first_after_mesh = after_mesh_paths[0] if after_mesh_paths else None
 
+    report("Collecting outputs...")
     return before_imgs, after_imgs, kpt_imgs, first_before_mesh, first_after_mesh
 
 
@@ -487,6 +504,11 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
                     save_mesh=save_mesh,
                 )
             else:
+                stage_updates: queue.Queue[str] = queue.Queue()
+
+                def report_stage(message: str) -> None:
+                    stage_updates.put(message)
+
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                     fut = pool.submit(
                         _collect_animal_results,
@@ -504,20 +526,30 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
                         kp_conf_thresh,
                         side_view,
                         save_mesh,
+                        report_stage,
                     )
                     t0 = time.monotonic()
+                    latest_stage = "Starting inference..."
                     while True:
+                        while True:
+                            try:
+                                latest_stage = stage_updates.get_nowait()
+                            except queue.Empty:
+                                break
+                            else:
+                                elapsed = int(time.monotonic() - t0)
+                                yield None, None, None, f"{latest_stage}\nElapsed: {elapsed}s"
                         try:
                             before_imgs, after_imgs, kpt_imgs, mesh_before, mesh_after = fut.result(
-                                timeout=hb
+                                timeout=1.0
                             )
                             break
                         except concurrent.futures.TimeoutError:
                             elapsed = int(time.monotonic() - t0)
                             yield None, None, None, (
-                                f"Inference still running ({elapsed}s). "
-                                f"Detection, SuperAnimal, and TTA can take several minutes; "
-                                f"updates every ~{int(hb)}s keep the connection alive."
+                                f"{latest_stage}\n"
+                                f"Elapsed: {elapsed}s\n"
+                                "CPU inference can take several minutes."
                             )
         except Exception:
             yield None, None, None, f"Inference failed:\n{traceback.format_exc()}"
@@ -558,7 +590,7 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
                 label="TTA iterations",
                 minimum=0,
                 maximum=100,
-                value=30,
+                value=0,
                 step=1,
                 info="Set to 0 to disable TTA and reuse the initial PRIMA prediction.",
             ),
@@ -624,4 +656,4 @@ if __name__ == "__main__":
     if _should_preload_assets():
         _preload_assets_once(args.checkpoint)
     demo = build_demo(checkpoint_path=args.checkpoint, out_folder=args.out_folder)
-    demo.launch(inbrowser=False)
+    demo.launch(inbrowser=False, ssr_mode=False)
