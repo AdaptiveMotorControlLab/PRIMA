@@ -29,8 +29,13 @@ import traceback
 from dataclasses import dataclass
 from functools import lru_cache
 from types import SimpleNamespace
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from pathlib import Path
+
+# macOS: PyRender (OpenGL) and DeepLabCut/pyglet must run on the main thread.
+if sys.platform == "darwin":
+    os.environ.setdefault("PYGLET_HEADLESS", "1")
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
 
 import cv2
 import gradio as gr
@@ -38,9 +43,7 @@ import numpy as np
 import torch
 import torch.utils.data
 
-# Space demo on macOS: limit BLAS threads (PyRender + PyTorch on main thread only).
-if sys.platform == "darwin" and os.environ.get("SPACE_ID"):
-    os.environ.setdefault("OMP_NUM_THREADS", "1")
+if sys.platform == "darwin":
     torch.set_num_threads(1)
 
 # Repo-local minimal ``chumpy`` shim (see ``chumpy/__init__.py``) so SMAL pickles load
@@ -190,6 +193,37 @@ def _gradio_examples_for_interface(profile: DemoProfile) -> List[List]:
         if p.is_file():
             rows.append([str(p), *rest])
     return rows
+
+
+def _should_use_gradio_queue(profile: DemoProfile) -> bool:
+    """Whether to enable Gradio's background queue.
+
+    On macOS local, the queue runs handlers in worker threads; PyRender and
+    pyglet/AppKit then crash with "setting the main menu on a non-main thread".
+    """
+    if _is_truthy_env("PRIMA_GRADIO_NO_QUEUE"):
+        return False
+    if _is_truthy_env("PRIMA_GRADIO_QUEUE"):
+        return True
+    return not (sys.platform == "darwin" and profile.mode == "local")
+
+
+def _warmup_runtime_cache(checkpoint_path: str, profile: DemoProfile) -> Dict[str, Any]:
+    """Load model + DLC on the main thread (recommended for macOS local)."""
+    print("[startup] Preloading DeepLabCut on main thread…")
+    _deeplabcut_available()
+    print("[startup] Loading PRIMA + Detectron2 on main thread (first run can take several minutes)…")
+    model, model_cfg, renderer, cam_crop_to_full_fn, device, detector = _load_model_and_detector_for_demo(
+        checkpoint_path, profile
+    )
+    return {
+        "model": model,
+        "model_cfg": model_cfg,
+        "renderer": renderer,
+        "cam_crop_to_full_fn": cam_crop_to_full_fn,
+        "device": device,
+        "detector": detector,
+    }
 
 
 def _should_preload_assets(profile: DemoProfile) -> bool:
@@ -501,14 +535,22 @@ def _collect_animal_results(
     return before_imgs, after_imgs, kpt_imgs, first_before_mesh, first_after_mesh
 
 
-def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFAULT_OUT_FOLDER) -> gr.Interface:
+def build_demo(
+    checkpoint_path: str = DEFAULT_CHECKPOINT,
+    out_folder: str = DEFAULT_OUT_FOLDER,
+    runtime_cache: Optional[Dict[str, Any]] = None,
+) -> gr.Interface:
     profile = get_demo_profile()
     print(
         f"[demo] profile={profile.mode} prima={profile.resolve_prima_device()} "
         f"detectron={profile.detectron_config_yaml} d2_device={profile.resolve_detectron_device()}"
     )
+    if _should_use_gradio_queue(profile):
+        print("[demo] Gradio queue enabled (background worker threads).")
+    else:
+        print("[demo] Gradio queue disabled (inference runs on main thread; required on macOS local).")
     os.makedirs(out_folder, exist_ok=True)
-    runtime_cache = {
+    runtime_cache = runtime_cache or {
         "model": None,
         "model_cfg": None,
         "renderer": None,
@@ -683,7 +725,8 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
     if _gradio_examples:
         _iface_kw["examples"] = _gradio_examples
     demo = gr.Interface(**_iface_kw)
-    demo.queue(max_size=8, default_concurrency_limit=1)
+    if _should_use_gradio_queue(profile):
+        demo.queue(max_size=8, default_concurrency_limit=1)
     return demo
 
 
@@ -709,5 +752,16 @@ if __name__ == "__main__":
     profile = get_demo_profile()
     if _should_preload_assets(profile):
         _preload_assets_once(args.checkpoint)
-    demo = build_demo(checkpoint_path=args.checkpoint, out_folder=args.out_folder)
+    runtime_cache: Optional[Dict[str, Any]] = None
+    if (
+        sys.platform == "darwin"
+        and profile.mode == "local"
+        and _is_truthy_env("PRIMA_WARMUP")
+    ):
+        runtime_cache = _warmup_runtime_cache(args.checkpoint, profile)
+    demo = build_demo(
+        checkpoint_path=args.checkpoint,
+        out_folder=args.out_folder,
+        runtime_cache=runtime_cache,
+    )
     demo.launch(inbrowser=False)
