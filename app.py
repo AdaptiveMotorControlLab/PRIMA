@@ -22,14 +22,14 @@ Gradio interface. The overall logic follows:
 """
 
 import argparse
-import concurrent.futures
 import os
 import sys
 import tempfile
-import time
 import traceback
+from dataclasses import dataclass
+from functools import lru_cache
 from types import SimpleNamespace
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 from pathlib import Path
 
 import cv2
@@ -37,6 +37,11 @@ import gradio as gr
 import numpy as np
 import torch
 import torch.utils.data
+
+# Space demo on macOS: limit BLAS threads (PyRender + PyTorch on main thread only).
+if sys.platform == "darwin" and os.environ.get("SPACE_ID"):
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    torch.set_num_threads(1)
 
 # Repo-local minimal ``chumpy`` shim (see ``chumpy/__init__.py``) so SMAL pickles load
 # without installing the full chumpy package in Space builds.
@@ -58,6 +63,103 @@ DEFAULT_HF_ASSET_REPO = DEFAULT_HF_REPO_ID
 # Output folder for rendered images/meshes and keypoints
 DEFAULT_OUT_FOLDER = "demo_out_tta_gradio"
 
+_D2_R50_CFG = "COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"
+_D2_R50_URL = (
+    "https://dl.fbaipublicfiles.com/detectron2/COCO-Detection/"
+    "faster_rcnn_R_50_FPN_3x/137849458/model_final_280758.pkl"
+)
+_D2_X101_CFG = "COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml"
+_D2_X101_URL = (
+    "https://dl.fbaipublicfiles.com/detectron2/COCO-Detection/"
+    "faster_rcnn_X_101_32x8d_FPN_3x/139173657/model_final_68b088.pkl"
+)
+
+# Gradio example row: (image_rel, tta_lr, tta_iters, det_thresh, kp_thresh, side_view, save_mesh)
+ExampleRow = Tuple[str, float, int, float, float, bool, bool]
+
+
+@dataclass(frozen=True)
+class DemoProfile:
+    """Runtime settings for either the full local app or the lightweight HF Space demo."""
+
+    mode: str
+    prima_device: str  # "auto" (CUDA if available) or "cpu"
+    detectron_config_yaml: str
+    detectron_weights_url: str
+    detectron_device: str  # "auto" or "cpu"
+    default_tta_iters: int
+    max_tta_iters: int
+    default_save_mesh: bool
+    default_side_view: bool
+    preload_assets: bool
+    example_rows: Tuple[ExampleRow, ...]
+    description: str
+    interface_title: str
+
+    def resolve_prima_device(self) -> torch.device:
+        if self.prima_device == "cpu":
+            return torch.device("cpu")
+        return torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
+    def resolve_detectron_device(self) -> str:
+        if self.detectron_device == "cpu":
+            return "cpu"
+        return "cuda" if torch.cuda.is_available() else "cpu"
+
+
+LOCAL_DEMO_PROFILE = DemoProfile(
+    mode="local",
+    prima_device="auto",
+    detectron_config_yaml=_D2_X101_CFG,
+    detectron_weights_url=_D2_X101_URL,
+    detectron_device="auto",
+    default_tta_iters=30,
+    max_tta_iters=100,
+    default_save_mesh=True,
+    default_side_view=False,
+    preload_assets=False,
+    example_rows=(
+        ("demo_data/000000015956_horse.png", 1e-6, 30, 0.7, 0.1, False, True),
+        ("demo_data/n02412080_12159.png", 1e-6, 30, 0.7, 0.1, False, True),
+        ("demo_data/000000315905_zebra.jpg", 1e-6, 30, 0.7, 0.1, False, True),
+        ("demo_data/beagle.jpg", 1e-6, 0, 0.7, 0.1, False, True),
+        ("demo_data/shepherd_hati.jpg", 1e-6, 0, 0.7, 0.1, False, True),
+    ),
+    description=(
+        "**Local demo** — full pipeline on your machine (GPU when available).\n\n"
+        "Detectron2 **X-101-FPN**, PRIMA mesh recovery, optional **DeepLabCut SuperAnimal + TTA**. "
+        "Set TTA iterations to **0** to skip adaptation. Outputs are saved under "
+        f"`{DEFAULT_OUT_FOLDER}`."
+    ),
+    interface_title=(
+        "PRIMA local demo (GPU/CPU) — detection, mesh recovery, optional TTA"
+    ),
+)
+
+SPACE_DEMO_PROFILE = DemoProfile(
+    mode="space",
+    prima_device="cpu",
+    detectron_config_yaml=_D2_R50_CFG,
+    detectron_weights_url=_D2_R50_URL,
+    detectron_device="cpu",
+    default_tta_iters=0,
+    max_tta_iters=30,
+    default_save_mesh=False,
+    default_side_view=False,
+    preload_assets=True,
+    example_rows=(
+        ("demo_data/beagle.jpg", 1e-6, 0, 0.7, 0.1, False, False),
+        ("demo_data/000000015956_horse.png", 1e-6, 0, 0.7, 0.1, False, False),
+        ("demo_data/000000315905_zebra.jpg", 1e-6, 0, 0.7, 0.1, False, False),
+    ),
+    description=(
+        "**Hugging Face Space (cpu-basic)** — lightweight demo: **CPU-only**, Detectron2 **R50-FPN**, "
+        "PRIMA inference. TTA is optional (0 by default; increases runtime). Mesh `.obj` export is off "
+        "by default to save time and disk."
+    ),
+    interface_title="PRIMA on Hugging Face — lightweight CPU demo",
+)
+
 
 def _is_truthy_env(var_name: str) -> bool:
     return os.environ.get(var_name, "").strip().lower() in {"1", "true", "yes", "on"}
@@ -67,47 +169,42 @@ def _running_on_space() -> bool:
     return bool(os.environ.get("SPACE_ID") or os.environ.get("HF_SPACE_ID"))
 
 
-def _gradio_examples_for_interface() -> List[List]:
-    """Gradio prefetches example media at startup.
+@lru_cache(maxsize=1)
+def get_demo_profile() -> DemoProfile:
+    """Select local vs Space profile. Override with ``PRIMA_DEMO_MODE=local|space``."""
+    override = os.environ.get("PRIMA_DEMO_MODE", "").strip().lower()
+    if override == "local":
+        return LOCAL_DEMO_PROFILE
+    if override == "space":
+        return SPACE_DEMO_PROFILE
+    return SPACE_DEMO_PROFILE if _running_on_space() else LOCAL_DEMO_PROFILE
 
-    Demo images are tracked with Git LFS / Xet (see ``.gitattributes``) so they can live
-    in the Hugging Face Space repo. Use absolute paths only when files exist beside ``app.py``.
-    """
+
+def _gradio_examples_for_interface(profile: DemoProfile) -> List[List]:
+    """Gradio prefetches example media at startup (paths must exist beside ``app.py``)."""
     if _is_truthy_env("PRIMA_DISABLE_GRADIO_EXAMPLES"):
         return []
     rows: List[List] = []
-    template: List[Tuple[str, float, int, float, float, bool, bool]] = [
-        ("demo_data/000000015956_horse.png", 1e-6, 30, 0.7, 0.1, False, True),
-        ("demo_data/n02412080_12159.png", 1e-6, 30, 0.7, 0.1, False, True),
-        ("demo_data/000000315905_zebra.jpg", 1e-6, 30, 0.7, 0.1, False, True),
-        ("demo_data/beagle.jpg", 1e-6, 30, 0.7, 0.1, False, True),
-        ("demo_data/shepherd_hati.jpg", 1e-6, 30, 0.7, 0.1, False, True),
-    ]
-    for rel, *rest in template:
+    for rel, *rest in profile.example_rows:
         p = _REPO_ROOT / rel
         if p.is_file():
             rows.append([str(p), *rest])
     return rows
 
 
-def _should_preload_assets() -> bool:
-    """Default to preload on Spaces; configurable via PRIMA_PRELOAD_ASSETS."""
+def _should_preload_assets(profile: DemoProfile) -> bool:
     preload_env = os.environ.get("PRIMA_PRELOAD_ASSETS")
     if preload_env is not None:
         return _is_truthy_env("PRIMA_PRELOAD_ASSETS")
-    return _running_on_space()
+    return profile.preload_assets
 
-def _gradio_heartbeat_interval_sec() -> float:
-    """How often to yield status while waiting on long CPU/GPU work (keeps WebSockets alive).
-
-    Set ``PRIMA_GRADIO_HEARTBEAT_SEC`` to ``0`` to run long work on the Gradio thread (old behavior).
-    """
-    raw = os.environ.get("PRIMA_GRADIO_HEARTBEAT_SEC", "25").strip()
+def _deeplabcut_available() -> bool:
     try:
-        v = float(raw)
-    except ValueError:
-        return 25.0
-    return max(0.0, v)
+        from deeplabcut.pose_estimation_pytorch.apis import superanimal_analyze_images  # noqa: F401
+
+        return True
+    except Exception:
+        return False
 
 
 def _preload_assets_once(checkpoint_path: str) -> None:
@@ -143,8 +240,9 @@ def _load_prima_model(checkpoint_path: str = DEFAULT_CHECKPOINT):
             f"Missing model config: {cfg_path}. Ensure the full checkpoint folder layout from README is present."
         )
 
+    profile = get_demo_profile()
     model, model_cfg = load_prima(checkpoint_path)
-    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    device = profile.resolve_prima_device()
     model = model.to(device)
     model.eval()
 
@@ -152,8 +250,8 @@ def _load_prima_model(checkpoint_path: str = DEFAULT_CHECKPOINT):
     return model, model_cfg, renderer, cam_crop_to_full, device
 
 
-def _build_detector():
-    """Build Detectron2 animal detector (same config as demo_tta/demo.py)."""
+def _build_detector(profile: Optional[DemoProfile] = None):
+    """Build Detectron2 animal detector (profile selects X-101+GPU locally vs R50+CPU on Space)."""
     try:
         import detectron2.config
         import detectron2.engine
@@ -162,25 +260,47 @@ def _build_detector():
         print(f"[warn] Detectron2 unavailable ({type(e).__name__}: {e}); using full-image fallback bbox.")
         return None
 
+    if profile is None:
+        profile = get_demo_profile()
+    config_yaml = profile.detectron_config_yaml
+    weights = profile.detectron_weights_url
+    device_str = profile.resolve_detectron_device()
+    print(f"[detectron2] mode={profile.mode} config={config_yaml} device={device_str}")
+
     cfg = detectron2.config.get_cfg()
-    cfg.merge_from_file(
-        model_zoo.get_config_file("COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml")
-    )
+    cfg.merge_from_file(model_zoo.get_config_file(config_yaml))
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5
-    cfg.MODEL.WEIGHTS = (
-        "https://dl.fbaipublicfiles.com/detectron2/COCO-Detection/"
-        "faster_rcnn_X_101_32x8d_FPN_3x/139173657/model_final_68b088.pkl"
-    )
-    cfg.MODEL.DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+    cfg.MODEL.WEIGHTS = weights
+    cfg.MODEL.DEVICE = device_str
     detector = detectron2.engine.DefaultPredictor(cfg)
     return detector
 
 
-def _load_model_and_detector_for_demo(checkpoint_path: str):
-    """Run on a worker thread when using heartbeat polling (single entry point for executor)."""
+def _load_model_and_detector_for_demo(checkpoint_path: str, profile: DemoProfile):
+    """Load PRIMA and Detectron2 once for the Gradio session (main thread only)."""
     model, model_cfg, renderer, cam_crop_to_full_fn, device = _load_prima_model(checkpoint_path)
-    detector = _build_detector()
+    detector = _build_detector(profile)
     return model, model_cfg, renderer, cam_crop_to_full_fn, device, detector
+
+
+def _detect_animal_boxes(
+    detector,
+    img_bgr: np.ndarray,
+    det_thresh: float,
+) -> Optional[np.ndarray]:
+    """Return Nx4 XYXY boxes or None if no animal detections."""
+    if detector is None:
+        h, w = img_bgr.shape[:2]
+        return np.array([[0.0, 0.0, float(max(1, w - 1)), float(max(1, h - 1))]], dtype=np.float32)
+
+    det_out = detector(img_bgr)
+    det_instances = det_out["instances"]
+    boxes, suppressed = select_animal_boxes(det_instances, score_threshold=float(det_thresh))
+    if suppressed > 0:
+        print(f"[INFO] Suppressed {suppressed} duplicate animal detection(s)")
+    if len(boxes) == 0:
+        return None
+    return boxes
 
 
 # SuperAnimal defaults (same as in demo_tta parser)
@@ -209,6 +329,7 @@ def _collect_animal_results(
     kp_conf_thresh: float,
     side_view: bool,
     save_mesh: bool,
+    boxes: Optional[np.ndarray] = None,
 ) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray], str | None, str | None]:
     """Run detection + PRIMA + SuperAnimal + TTA on a single RGB image.
 
@@ -232,21 +353,11 @@ def _collect_animal_results(
     if int(tta_num_iters) > 0 and not SUPER_ANIMAL_ARGS.saved_2d_model_path:
         SUPER_ANIMAL_ARGS.saved_2d_model_path = resolve_sa_weights_path("")
 
-    # Detect animals
     img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
-    if detector is None:
-        # Fallback for environments where Detectron2 is unavailable: process full image as one crop.
-        h, w = img_bgr.shape[:2]
-        boxes = np.array([[0.0, 0.0, float(max(1, w - 1)), float(max(1, h - 1))]], dtype=np.float32)
-    else:
-        det_out = detector(img_bgr)
-        det_instances = det_out["instances"]
-
-        boxes, suppressed = select_animal_boxes(det_instances, score_threshold=float(det_thresh))
-        if suppressed > 0:
-            print(f"[INFO] Suppressed {suppressed} duplicate animal detection(s)")
-        if len(boxes) == 0:
-            return [], [], [], None, None
+    if boxes is None:
+        boxes = _detect_animal_boxes(detector, img_bgr, det_thresh)
+    if boxes is None:
+        return [], [], [], None, None
 
     dataset = ViTDetDataset(model_cfg, img_bgr, boxes)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
@@ -391,6 +502,11 @@ def _collect_animal_results(
 
 
 def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFAULT_OUT_FOLDER) -> gr.Interface:
+    profile = get_demo_profile()
+    print(
+        f"[demo] profile={profile.mode} prima={profile.resolve_prima_device()} "
+        f"detectron={profile.detectron_config_yaml} d2_device={profile.resolve_detectron_device()}"
+    )
     os.makedirs(out_folder, exist_ok=True)
     runtime_cache = {
         "model": None,
@@ -420,6 +536,16 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
             yield None, None, None, "No image provided."
             return
 
+        if int(tta_num_iters) > 0 and not _deeplabcut_available():
+            yield (
+                None,
+                None,
+                None,
+                "DeepLabCut is not installed. Set **TTA iterations** to **0** for PRIMA-only inference, "
+                "or install `deeplabcut` (see README / requirements.txt).",
+            )
+            return
+
         if image.dtype != np.uint8:
             img_rgb = np.clip(image, 0, 255).astype(np.uint8)
         else:
@@ -427,36 +553,18 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
 
         yield None, None, None, "Queued; preparing run…"
 
-        hb = _gradio_heartbeat_interval_sec()
-
         if runtime_cache["model"] is None:
             yield (
                 None,
                 None,
                 None,
                 "First run: downloading demo assets from Hugging Face (large checkpoint) "
-                "and loading the model. This can take many minutes; status updates here "
-                "mean the session is still alive.",
+                "and loading the model. This can take many minutes.",
             )
             try:
-                if hb <= 0:
-                    model, model_cfg, renderer, cam_crop_to_full_fn, device, detector = _load_model_and_detector_for_demo(
-                        checkpoint_path
-                    )
-                else:
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                        fut = pool.submit(_load_model_and_detector_for_demo, checkpoint_path)
-                        t0 = time.monotonic()
-                        while True:
-                            try:
-                                model, model_cfg, renderer, cam_crop_to_full_fn, device, detector = fut.result(timeout=hb)
-                                break
-                            except concurrent.futures.TimeoutError:
-                                elapsed = int(time.monotonic() - t0)
-                                yield None, None, None, (
-                                    f"First run: still loading model and assets ({elapsed}s). "
-                                    f"Updates every ~{int(hb)}s keep the browser connection open on Spaces."
-                                )
+                model, model_cfg, renderer, cam_crop_to_full_fn, device, detector = _load_model_and_detector_for_demo(
+                    checkpoint_path, profile
+                )
             except Exception:
                 yield None, None, None, f"Model initialization failed:\n{traceback.format_exc()}"
                 return
@@ -466,59 +574,43 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
             runtime_cache["cam_crop_to_full_fn"] = cam_crop_to_full_fn
             runtime_cache["device"] = device
             runtime_cache["detector"] = detector
-            yield None, None, None, "Model loaded. Running detection and inference…"
+            yield None, None, None, "Model loaded."
 
         try:
-            if hb <= 0:
-                before_imgs, after_imgs, kpt_imgs, mesh_before, mesh_after = _collect_animal_results(
-                    runtime_cache["model"],
-                    runtime_cache["model_cfg"],
-                    runtime_cache["renderer"],
-                    runtime_cache["cam_crop_to_full_fn"],
-                    runtime_cache["device"],
-                    runtime_cache["detector"],
-                    out_folder,
-                    img_rgb,
-                    tta_lr=tta_lr,
-                    tta_num_iters=tta_num_iters,
-                    det_thresh=det_thresh,
-                    kp_conf_thresh=kp_conf_thresh,
-                    side_view=side_view,
-                    save_mesh=save_mesh,
+            yield None, None, None, "Running animal detection…"
+            img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
+            boxes = _detect_animal_boxes(runtime_cache["detector"], img_bgr, det_thresh)
+            if boxes is None:
+                yield (
+                    None,
+                    None,
+                    None,
+                    "No animal detected. Try lowering the detection threshold or another image.",
                 )
-            else:
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    fut = pool.submit(
-                        _collect_animal_results,
-                        runtime_cache["model"],
-                        runtime_cache["model_cfg"],
-                        runtime_cache["renderer"],
-                        runtime_cache["cam_crop_to_full_fn"],
-                        runtime_cache["device"],
-                        runtime_cache["detector"],
-                        out_folder,
-                        img_rgb,
-                        tta_lr,
-                        tta_num_iters,
-                        det_thresh,
-                        kp_conf_thresh,
-                        side_view,
-                        save_mesh,
-                    )
-                    t0 = time.monotonic()
-                    while True:
-                        try:
-                            before_imgs, after_imgs, kpt_imgs, mesh_before, mesh_after = fut.result(
-                                timeout=hb
-                            )
-                            break
-                        except concurrent.futures.TimeoutError:
-                            elapsed = int(time.monotonic() - t0)
-                            yield None, None, None, (
-                                f"Inference still running ({elapsed}s). "
-                                f"Detection, SuperAnimal, and TTA can take several minutes; "
-                                f"updates every ~{int(hb)}s keep the connection alive."
-                            )
+                return
+            yield (
+                None,
+                None,
+                None,
+                f"Detected {len(boxes)} animal region(s). Running PRIMA (+ SuperAnimal/TTA if enabled)…",
+            )
+            before_imgs, after_imgs, kpt_imgs, mesh_before, mesh_after = _collect_animal_results(
+                runtime_cache["model"],
+                runtime_cache["model_cfg"],
+                runtime_cache["renderer"],
+                runtime_cache["cam_crop_to_full_fn"],
+                runtime_cache["device"],
+                runtime_cache["detector"],
+                out_folder,
+                img_rgb,
+                tta_lr=tta_lr,
+                tta_num_iters=tta_num_iters,
+                det_thresh=det_thresh,
+                kp_conf_thresh=kp_conf_thresh,
+                side_view=side_view,
+                save_mesh=save_mesh,
+                boxes=boxes,
+            )
         except Exception:
             yield None, None, None, f"Inference failed:\n{traceback.format_exc()}"
             return
@@ -536,7 +628,7 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
             return
         yield first_before, first_after, first_kpts, "OK"
 
-    _gradio_examples = _gradio_examples_for_interface()
+    _gradio_examples = _gradio_examples_for_interface(profile)
     _iface_kw = dict(
         fn=gradio_inference,
         analytics_enabled=False,
@@ -557,8 +649,8 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
             gr.Slider(
                 label="TTA iterations",
                 minimum=0,
-                maximum=100,
-                value=30,
+                maximum=profile.max_tta_iters,
+                value=profile.default_tta_iters,
                 step=1,
                 info="Set to 0 to disable TTA and reuse the initial PRIMA prediction.",
             ),
@@ -576,8 +668,8 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
                 value=0.1,
                 step=0.05,
             ),
-            gr.Checkbox(label="Render side view", value=False),
-            gr.Checkbox(label="Save meshes (.obj)", value=True),
+            gr.Checkbox(label="Render side view", value=profile.default_side_view),
+            gr.Checkbox(label="Save meshes (.obj)", value=profile.default_save_mesh),
         ],
         outputs=[
             gr.Image(label="Before TTA"),
@@ -585,15 +677,8 @@ def build_demo(checkpoint_path: str = DEFAULT_CHECKPOINT, out_folder: str = DEFA
             gr.Image(label="PRIMA 26 keypoints"),
             gr.Textbox(label="Status / Traceback", lines=12),
         ],
-        title="PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation",
-        description=(
-            "Upload an animal image. The demo runs Detectron2 for animal detection, "
-            "PRIMA for 3D pose/shape, DeepLabCut SuperAnimal for 2D keypoints, and "
-            "test-time adaptation (TTA) with configurable learning rate and iterations. "
-            "Set TTA iterations to 0 to disable adaptation.\n\n"
-            "Results (PNG/OBJ and 26-keypoint visualizations) are saved under "
-            f"'{out_folder}'."
-        ),
+        title=profile.interface_title,
+        description=profile.description,
     )
     if _gradio_examples:
         _iface_kw["examples"] = _gradio_examples
@@ -621,7 +706,8 @@ def parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = parse_args()
-    if _should_preload_assets():
+    profile = get_demo_profile()
+    if _should_preload_assets(profile):
         _preload_assets_once(args.checkpoint)
     demo = build_demo(checkpoint_path=args.checkpoint, out_folder=args.out_folder)
     demo.launch(inbrowser=False)

@@ -118,18 +118,25 @@ python -m pip install --no-input -U pip wheel
 python -m pip install --no-input "setuptools<81" "packaging<25" "Cython<3"
 
 echo "[clean-install] pip install -r requirements.txt (this can take a long time) ..."
-REQ_FILE="${ROOT}/requirements.txt"
-REQ_TMP=""
+REQ_TMP="$(mktemp)"
+grep -vE '^[[:space:]]*(deeplabcut|detectron2)' "${ROOT}/requirements.txt" > "${REQ_TMP}"
+python -m pip install --no-input -r "${REQ_TMP}"
+rm -f "${REQ_TMP}"
+
 if [[ "$(uname -s)" == "Darwin" ]]; then
-  # deeplabcut pins PyTables 3.8.x, which often fails to build from source on macOS/arm64.
-  # Hugging Face Spaces (Linux) use the full requirements.txt unchanged.
-  REQ_TMP="$(mktemp)"
-  grep -vE '^[[:space:]]*deeplabcut' "${ROOT}/requirements.txt" > "${REQ_TMP}"
-  REQ_FILE="${REQ_TMP}"
-  echo "[clean-install] macOS: installing without deeplabcut line (use conda for DLC + TTA; Gradio with TTA iters=0 still works)."
+  echo "[clean-install] macOS: PyTables wheel then DeepLabCut 3.x (SuperAnimal pytorch API) ..."
+  python -m pip install --no-input "tables>=3.9.2,<3.11"
+  python -m pip install --no-input "deeplabcut==3.0.0rc14" || {
+    echo "[clean-install] ERROR: deeplabcut install failed. Try: brew install hdf5 && retry." >&2
+    exit 1
+  }
+else
+  python -m pip install --no-input "deeplabcut==3.0.0rc14"
 fi
-python -m pip install --no-input -r "${REQ_FILE}"
-[[ -n "${REQ_TMP}" ]] && rm -f "${REQ_TMP}"
+
+echo "[clean-install] Detectron2 (needs torch in venv; --no-build-isolation) ..."
+python -m pip install --no-input --no-build-isolation \
+  "detectron2 @ git+https://github.com/facebookresearch/detectron2.git"
 
 # Spaces install Gradio separately; local venv needs it for app.py.
 echo "[clean-install] Installing Gradio for local demo (HF Space provides its own) ..."
@@ -158,7 +165,16 @@ fi
 
 export PYTHONPATH="${ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 
-echo "[clean-install] Smoke test: import app + build_demo ..."
-python -c "import app; app.build_demo(); print('[clean-install] Gradio demo build: OK')"
+echo "[clean-install] Smoke test: import app + build_demo + DeepLabCut API ..."
+python -c "
+import app
+app.get_demo_profile.cache_clear()
+p = app.get_demo_profile()
+print('[clean-install] demo profile:', p.mode)
+app.build_demo()
+print('[clean-install] DeepLabCut SuperAnimal (may take ~30s on first import) ...')
+from deeplabcut.pose_estimation_pytorch.apis import superanimal_analyze_images  # noqa: F401
+print('[clean-install] Gradio demo build + DeepLabCut 3.x: OK')
+"
 
 echo "[clean-install] Done. Activate with: source ${VENV}/bin/activate"
