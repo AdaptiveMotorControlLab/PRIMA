@@ -32,9 +32,8 @@ from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple
 from pathlib import Path
 
-# macOS: PyRender (OpenGL) and DeepLabCut/pyglet must run on the main thread.
+# macOS: keep compute single-threaded and run inference on main thread.
 if sys.platform == "darwin":
-    os.environ.setdefault("PYGLET_HEADLESS", "1")
     os.environ.setdefault("OMP_NUM_THREADS", "1")
 
 import cv2
