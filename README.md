@@ -63,7 +63,11 @@ Options:
 - `PRIMA_VENV=.venv ./scripts/clean_install_local.sh --skip-data` — skip the large `setup_demo_data` download if `data/` is already populated.
 - `./scripts/clean_install_local.sh --wipe-data --force-data` — delete downloaded `data/` assets and redownload.
 - `./scripts/clean_install_local.sh --no-editable` — only `requirements.txt` (no `pip install -e .`); use if editable install fails and you will install the training stack via conda as in the PyPI section above. You still need **Python 3.10+** for Gradio 5.1+. The smoke test sets `PYTHONPATH` to the repo root so `import prima` works without an editable install.
-- **`requirements.txt` pins `deeplabcut==3.0.0rc14`** (SuperAnimal PyTorch API). On macOS, `clean_install_local.sh` installs a PyTables wheel first, then DLC 3.x. Full check: `./scripts/test_local_full.sh`.
+- **macOS / DeepLabCut:** `requirements.txt` pins `deeplabcut==3.0.0rc14`
+  for the SuperAnimal PyTorch API. On macOS, `clean_install_local.sh` installs
+  it separately after a compatible PyTables wheel (`tables>=3.9.2,<3.11`) to
+  avoid Apple Silicon build issues. Validate the local setup with
+  `./scripts/test_local_full.sh`.
 
 After `requirements.txt`, the script runs **`pip install --no-deps -e .`** so the `prima` package is registered without re-resolving `pyproject.toml` (which would pull **Detectron2** from git again). Install Detectron2 separately if needed: `pip install 'git+https://github.com/facebookresearch/detectron2.git'`.
 
@@ -186,8 +190,9 @@ Then from a clean checkout with LFS files present, redeploy the Space (same as `
 ./scripts/clean_redeploy_hf_space.sh
 ```
 
-The script rsyncs the working tree (not `git archive`) so image files are materialized
-before `git add` turns them into LFS blobs.
+The script rsyncs only the Git-tracked files needed by the Space from the
+working tree (not `git archive`) so image files are materialized before
+`git add` turns them into LFS blobs.
 
 ---
 

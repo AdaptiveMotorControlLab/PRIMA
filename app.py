@@ -22,15 +22,17 @@ Gradio interface. The overall logic follows:
 """
 
 import argparse
+import concurrent.futures
 import os
 import queue
 import sys
 import tempfile
+import time
 import traceback
 from dataclasses import dataclass
 from functools import lru_cache
 from types import SimpleNamespace
-from typing import Callable, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from pathlib import Path
 
 # macOS: PyRender (OpenGL) and DeepLabCut/pyglet must run on the main thread.
@@ -189,14 +191,7 @@ def _gradio_examples_for_interface(profile: DemoProfile) -> List[List]:
     if _is_truthy_env("PRIMA_DISABLE_GRADIO_EXAMPLES"):
         return []
     rows: List[List] = []
-    template: List[Tuple[str, float, int, float, float, bool, bool]] = [
-        ("demo_data/000000015956_horse.png", 1e-6, 0, 0.7, 0.1, False, True),
-        ("demo_data/n02412080_12159.png", 1e-6, 0, 0.7, 0.1, False, True),
-        ("demo_data/000000315905_zebra.jpg", 1e-6, 0, 0.7, 0.1, False, True),
-        ("demo_data/beagle.jpg", 1e-6, 0, 0.7, 0.1, False, True),
-        ("demo_data/shepherd_hati.jpg", 1e-6, 0, 0.7, 0.1, False, True),
-    ]
-    for rel, *rest in template:
+    for rel, *rest in profile.example_rows:
         p = _REPO_ROOT / rel
         if p.is_file():
             rows.append([str(p), *rest])
@@ -371,7 +366,8 @@ def _collect_animal_results(
     kp_conf_thresh: float,
     side_view: bool,
     save_mesh: bool,
-    progress_callback: Callable[[str], None] | None = None,
+    boxes: Optional[np.ndarray] = None,
+    progress_callback: Optional[Callable[[str], None]] = None,
 ) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray], str | None, str | None]:
     """Run detection + PRIMA + SuperAnimal + TTA on a single RGB image.
 
@@ -401,21 +397,14 @@ def _collect_animal_results(
         SUPER_ANIMAL_ARGS.saved_2d_model_path = resolve_sa_weights_path("")
 
     img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
-    if detector is None:
-        # Fallback for environments where Detectron2 is unavailable: process full image as one crop.
-        report("Detectron2 unavailable; using full-image crop...")
-        h, w = img_bgr.shape[:2]
-        boxes = np.array([[0.0, 0.0, float(max(1, w - 1)), float(max(1, h - 1))]], dtype=np.float32)
-    else:
-        report("Detecting animals with Detectron2...")
-        det_out = detector(img_bgr)
-        det_instances = det_out["instances"]
-
-        boxes, suppressed = select_animal_boxes(det_instances, score_threshold=float(det_thresh))
-        if suppressed > 0:
-            print(f"[INFO] Suppressed {suppressed} duplicate animal detection(s)")
-        if len(boxes) == 0:
-            return [], [], [], None, None
+    if boxes is None:
+        if detector is None:
+            report("Detectron2 unavailable; using full-image crop...")
+        else:
+            report("Detecting animals with Detectron2...")
+        boxes = _detect_animal_boxes(detector, img_bgr, det_thresh)
+    if boxes is None:
+        return [], [], [], None, None
 
     report(f"Detected {len(boxes)} animal(s). Preparing crops...")
     dataset = ViTDetDataset(model_cfg, img_bgr, boxes)
@@ -662,7 +651,35 @@ def build_demo(
                     None,
                     "No animal detected. Try lowering the detection threshold or another image.",
                 )
-            else:
+                return
+            yield (
+                None,
+                None,
+                None,
+                f"Detected {len(boxes)} animal region(s). Running PRIMA (+ SuperAnimal/TTA if enabled)...",
+            )
+
+            def run_collect(progress_callback: Optional[Callable[[str], None]] = None):
+                return _collect_animal_results(
+                    runtime_cache["model"],
+                    runtime_cache["model_cfg"],
+                    runtime_cache["renderer"],
+                    runtime_cache["cam_crop_to_full_fn"],
+                    runtime_cache["device"],
+                    runtime_cache["detector"],
+                    out_folder,
+                    img_rgb,
+                    tta_lr=tta_lr,
+                    tta_num_iters=tta_num_iters,
+                    det_thresh=det_thresh,
+                    kp_conf_thresh=kp_conf_thresh,
+                    side_view=side_view,
+                    save_mesh=save_mesh,
+                    boxes=boxes,
+                    progress_callback=progress_callback,
+                )
+
+            if _should_use_gradio_queue(profile):
                 stage_updates: queue.Queue[str] = queue.Queue()
 
                 def report_stage(message: str) -> None:
@@ -670,21 +687,7 @@ def build_demo(
 
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                     fut = pool.submit(
-                        _collect_animal_results,
-                        runtime_cache["model"],
-                        runtime_cache["model_cfg"],
-                        runtime_cache["renderer"],
-                        runtime_cache["cam_crop_to_full_fn"],
-                        runtime_cache["device"],
-                        runtime_cache["detector"],
-                        out_folder,
-                        img_rgb,
-                        tta_lr,
-                        tta_num_iters,
-                        det_thresh,
-                        kp_conf_thresh,
-                        side_view,
-                        save_mesh,
+                        run_collect,
                         report_stage,
                     )
                     t0 = time.monotonic()
@@ -710,6 +713,8 @@ def build_demo(
                                 f"Elapsed: {elapsed}s\n"
                                 "CPU inference can take several minutes."
                             )
+            else:
+                before_imgs, after_imgs, kpt_imgs, mesh_before, mesh_after = run_collect()
         except Exception:
             yield None, None, None, f"Inference failed:\n{traceback.format_exc()}"
             return
@@ -748,8 +753,8 @@ def build_demo(
             gr.Slider(
                 label="TTA iterations",
                 minimum=0,
-                maximum=100,
-                value=0,
+                maximum=profile.max_tta_iters,
+                value=profile.default_tta_iters,
                 step=1,
                 info="Set to 0 to disable TTA and reuse the initial PRIMA prediction.",
             ),
@@ -809,5 +814,16 @@ if __name__ == "__main__":
     profile = get_demo_profile()
     if _should_preload_assets(profile):
         _preload_assets_once(args.checkpoint)
-    demo = build_demo(checkpoint_path=args.checkpoint, out_folder=args.out_folder)
+    runtime_cache: Optional[Dict[str, Any]] = None
+    if (
+        sys.platform == "darwin"
+        and profile.mode == "local"
+        and _is_truthy_env("PRIMA_WARMUP")
+    ):
+        runtime_cache = _warmup_runtime_cache(args.checkpoint, profile)
+    demo = build_demo(
+        checkpoint_path=args.checkpoint,
+        out_folder=args.out_folder,
+        runtime_cache=runtime_cache,
+    )
     demo.launch(inbrowser=False, ssr_mode=False)

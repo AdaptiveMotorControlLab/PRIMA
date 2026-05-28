@@ -1,0 +1,7 @@
+libosmesa6
+libgl1
+libgl1-mesa-dri
+libegl-mesa0
+libegl1
+libglx-mesa0
+libgles2
