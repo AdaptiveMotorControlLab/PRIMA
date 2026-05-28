@@ -159,9 +159,9 @@ SPACE_DEMO_PROFILE = DemoProfile(
         ("demo_data/000000315905_zebra.jpg", 1e-6, 0, 0.7, 0.1, False, False),
     ),
     description=(
-        "**Hugging Face Space (cpu-basic)** — lightweight demo: **CPU-only**, Detectron2 **R50-FPN**, "
-        "PRIMA inference. TTA is optional (0 by default; increases runtime). Mesh `.obj` export is off "
-        "by default to save time and disk."
+        "**Hugging Face Space (cpu-basic)** — lightweight demo: **CPU-only** PRIMA inference. "
+        "The Space build skips Detectron2 and uses a full-image crop fallback. TTA is optional "
+        "(0 by default; increases runtime). Mesh `.obj` export is off by default to save time and disk."
     ),
     interface_title="PRIMA on Hugging Face — lightweight CPU demo",
 )
