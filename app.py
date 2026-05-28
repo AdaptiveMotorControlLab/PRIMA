@@ -240,13 +240,14 @@ def _collect_animal_results(
         SUPER_ANIMAL_ARGS.saved_2d_model_path = resolve_sa_weights_path("")
 
     # Detect animals
-    report("Detecting animals...")
     img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
     if detector is None:
         # Fallback for environments where Detectron2 is unavailable: process full image as one crop.
+        report("Detectron2 unavailable; using full-image crop...")
         h, w = img_bgr.shape[:2]
         boxes = np.array([[0.0, 0.0, float(max(1, w - 1)), float(max(1, h - 1))]], dtype=np.float32)
     else:
+        report("Detecting animals with Detectron2...")
         det_out = detector(img_bgr)
         det_instances = det_out["instances"]
 
