@@ -68,6 +68,12 @@ for path in "${SPACE_EXTRA_FILES[@]}"; do
 done
 
 README_FILE="${TMP}/README.md"
+REQ_FILE="${TMP}/requirements.txt"
+
+echo "[deploy] Removing Detectron2 from Space requirements (app falls back to full-image crops) ..."
+grep -vE '^[[:space:]]*detectron2([[:space:]]|@|$)' "$REQ_FILE" > "${REQ_FILE}.tmp"
+mv "${REQ_FILE}.tmp" "$REQ_FILE"
+
 if ! sed -n '1,20p' "$README_FILE" | grep -q '^sdk: gradio$'; then
   echo "[deploy] Adding Hugging Face Space YAML front matter to README.md ..."
   README_TMP="${README_FILE}.tmp"
