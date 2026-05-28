@@ -68,7 +68,7 @@ def main() -> int:
     img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB).astype(np.uint8)
 
     print("[local_infer] Loading PRIMA model ...")
-    model, model_cfg, renderer, device = app._load_prima_model()
+    model, model_cfg, renderer, cam_crop_to_full_fn, device = app._load_prima_model()
     print(f"[local_infer] device={device}")
 
     print("[local_infer] Building detector (Detectron2 if installed, else fallback) ...")
@@ -80,6 +80,7 @@ def main() -> int:
         model,
         model_cfg,
         renderer,
+        cam_crop_to_full_fn,
         device,
         detector,
         str(out_dir),
