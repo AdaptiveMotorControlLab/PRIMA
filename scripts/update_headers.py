@@ -47,17 +47,6 @@ def should_skip_file(file_path):
         if part in skip_dirs:
             return True
     
-    # Skip __init__.py files that are typically minimal
-    if file_path.name == '__init__.py':
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            # Skip if __init__.py is very short (likely just imports)
-            if len(content.strip()) < 50:
-                return True
-        except Exception:
-            pass
-    
     return False
 
 
@@ -75,25 +64,13 @@ def has_header(content):
     if STANDARD_HEADER.strip() in content:
         return True
     
-    # Check for header with additional content (like in sort.py)
-    # Header should contain the key elements
-    lines = content.split('\n')
-    if len(lines) < 3:
-        return False
-    
-    # Check if it starts with a docstring
-    if not lines[0].strip().startswith('"""'):
-        return False
-    
-    # Check for key header components in the first 15 lines
-    header_section = '\n'.join(lines[:15])
     required_elements = [
-        'FMPose3D: monocular 3D Pose Estimation via Flow Matching',
-        'Ti Wang, Xiaohang Yu, and Mackenzie Weygandt Mathis',
-        'Licensed under Apache 2.0'
+        'PRIMA: Boosting Animal Mesh Recovery with Biological Priors',
+        'Xiaohang Yu, Ti Wang, and Mackenzie Weygandt Mathis',
+        'Licensed under a modified MIT license',
     ]
-    
-    return all(elem in header_section for elem in required_elements)
+
+    return all(elem in content for elem in required_elements)
 
 
 def needs_header_update(content):
@@ -167,11 +144,12 @@ def add_or_update_header(file_path, check_only=False):
                         break
                 
                 if future_import_index is not None:
-                    # If there's a from __future__ import, add header AFTER it
-                    new_lines.extend(lines[insert_index:future_import_index+1])
-                    new_lines.append(STANDARD_HEADER)
-                    new_lines.append('')
-                    new_lines.extend(lines[future_import_index+1:])
+                    # ``from __future__`` must stay first; PRIMA header docstring follows it.
+                    new_lines.extend(lines[insert_index:future_import_index + 1])
+                    if STANDARD_HEADER.strip() not in content:
+                        new_lines.append(STANDARD_HEADER)
+                        new_lines.append('')
+                    new_lines.extend(lines[future_import_index + 1:])
                 else:
                     # Otherwise, add header at the beginning (after shebang if present)
                     new_lines.append(STANDARD_HEADER)

@@ -63,9 +63,9 @@ Options:
 - `PRIMA_VENV=.venv ./scripts/clean_install_local.sh --skip-data` — skip the large `setup_demo_data` download if `data/` is already populated.
 - `./scripts/clean_install_local.sh --wipe-data --force-data` — delete downloaded `data/` assets and redownload.
 - `./scripts/clean_install_local.sh --no-editable` — only `requirements.txt` (no `pip install -e .`); use if editable install fails and you will install the training stack via conda as in the PyPI section above. You still need **Python 3.10+** for Gradio 5.1+. The smoke test sets `PYTHONPATH` to the repo root so `import prima` works without an editable install.
-- **macOS:** the script omits the `deeplabcut` line from `pip install` because DeepLabCut’s pinned PyTables version often does not build on Apple Silicon. Use conda/mamba for DeepLabCut if you need SuperAnimal + TTA (`tta_num_iters` &gt; 0). **Linux** (including Hugging Face Space builds) uses the full `requirements.txt` including `deeplabcut`.
+- **`requirements.txt` pins `deeplabcut==3.0.0rc14`** (SuperAnimal PyTorch API). On macOS, `clean_install_local.sh` installs a PyTables wheel first, then DLC 3.x. Full check: `./scripts/test_local_full.sh`.
 
-After `requirements.txt`, the script runs **`pip install --no-deps -e .`** so the `prima` package is registered without re-resolving `pyproject.toml` (which would pull **Detectron2** and **DeepLabCut** again and often fail on macOS). Full `pip install -e .` is still recommended from a **conda** environment per the PyPI section if you need every training extra matched exactly.
+After `requirements.txt`, the script runs **`pip install --no-deps -e .`** so the `prima` package is registered without re-resolving `pyproject.toml` (which would pull **Detectron2** from git again). Install Detectron2 separately if needed: `pip install 'git+https://github.com/facebookresearch/detectron2.git'`.
 
 **Hugging Face Space (full redeploy from your working tree):**
 
@@ -153,6 +153,18 @@ python app.py \
 This starts a local Gradio app (by default on http://127.0.0.1:7860), where
 you can upload images and visualize PRIMA predictions and adaptation results.
 The `s1ckpt_inference.ckpt` checkpoint is downloaded automatically if missing.
+
+`app.py` picks a **demo profile** automatically:
+
+| | **Local** (`python app.py`) | **Hugging Face Space** |
+|--|--|--|
+| PRIMA device | GPU if available, else CPU | CPU only |
+| Detectron2 | X-101-FPN | R50-FPN (lighter) |
+| Default TTA iterations | 30 | 0 (PRIMA-only by default) |
+| Save `.obj` meshes | on | off |
+| Preload checkpoint at startup | off | on |
+
+Override for testing: `PRIMA_DEMO_MODE=local` or `PRIMA_DEMO_MODE=space`.
 
 #### Hugging Face Space (maintainers)
 

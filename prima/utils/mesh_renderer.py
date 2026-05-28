@@ -11,10 +11,8 @@ import os
 from ctypes.util import find_library
 
 if 'PYOPENGL_PLATFORM' not in os.environ and os.uname().sysname != 'Darwin':
-    # Prefer EGL; PyOpenGL's OSMesa bindings can lack symbols required by pyrender.
-    os.environ['PYOPENGL_PLATFORM'] = 'egl' if find_library('EGL') else 'osmesa'
-    if os.environ['PYOPENGL_PLATFORM'] == 'egl':
-        os.environ.setdefault('EGL_PLATFORM', 'surfaceless')
+    # Prefer OSMesa; fall back to EGL where available.
+    os.environ['PYOPENGL_PLATFORM'] = 'osmesa' if find_library('OSMesa') else 'egl'
 import torch
 from torchvision.utils import make_grid
 import numpy as np

@@ -13,10 +13,8 @@ import os
 from ctypes.util import find_library
 
 if 'PYOPENGL_PLATFORM' not in os.environ and os.uname().sysname != 'Darwin':
-    # Prefer EGL; PyOpenGL's OSMesa bindings can lack symbols required by pyrender.
-    os.environ['PYOPENGL_PLATFORM'] = 'egl' if find_library('EGL') else 'osmesa'
-    if os.environ['PYOPENGL_PLATFORM'] == 'egl':
-        os.environ.setdefault('EGL_PLATFORM', 'surfaceless')
+    # Prefer OSMesa; fall back to EGL where available.
+    os.environ['PYOPENGL_PLATFORM'] = 'osmesa' if find_library('OSMesa') else 'egl'
 import torch
 import numpy as np
 import pyrender
@@ -207,9 +205,18 @@ class Renderer:
         # Use custom focal length if provided, otherwise use default
         focal_length_to_use = focal_length if focal_length is not None else self.focal_length
         
-        renderer = pyrender.OffscreenRenderer(viewport_width=image.shape[1],
-                                              viewport_height=image.shape[0],
-                                              point_size=1.0)
+        try:
+            renderer = pyrender.OffscreenRenderer(
+                viewport_width=image.shape[1],
+                viewport_height=image.shape[0],
+                point_size=1.0,
+            )
+        except (IndexError, OSError) as exc:
+            raise RuntimeError(
+                "PyRender could not open an OpenGL context (common on headless macOS or remote SSH). "
+                "Run the demo from a normal desktop session, or on Linux/Spaces use OSMesa (see packages.txt). "
+                f"Original error: {exc}"
+            ) from exc
         material = pyrender.MetallicRoughnessMaterial(
             metallicFactor=0.0,
             alphaMode='OPAQUE',
@@ -431,3 +438,5 @@ class Renderer:
             if scene.has_node(node):
                 continue
             scene.add_node(node)
+
+

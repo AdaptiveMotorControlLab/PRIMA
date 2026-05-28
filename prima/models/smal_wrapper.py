@@ -49,13 +49,27 @@ class SMALLayer(nn.Module):
     def __init__(self, num_betas=41, **kwargs):
         super().__init__()
         self.num_betas = num_betas
-        self.register_buffer("shapedirs", torch.from_numpy(np.array(kwargs['shapedirs'], dtype=np.float32))[:, :, :num_betas]) # [3889, 3, 41]
-        self.register_buffer("v_template", torch.from_numpy(np.array(kwargs['v_template']).astype(np.float32)))  # [3889, 3]
-        self.register_buffer("posedirs", torch.from_numpy(np.array(kwargs['posedirs'], dtype=np.float32)).reshape(-1,
-                                                                                                 34*9).T)  # [34*9, 11667]
-        self.register_buffer("J_regressor", torch.from_numpy(kwargs['J_regressor'].toarray().astype(np.float32)))  # [33, 3389]
-        self.register_buffer("lbs_weights", torch.from_numpy(np.array(kwargs['weights'], dtype=np.float32)))  # [3889, 33]
-        self.register_buffer("faces", torch.from_numpy(np.array(kwargs['f'], dtype=np.int32)))  # [7774, 3]
+        from chumpy.ch import materialize
+
+        self.register_buffer(
+            "shapedirs",
+            torch.from_numpy(materialize(kwargs["shapedirs"]))[:, :, :num_betas],
+        )  # [3889, 3, 41]
+        self.register_buffer(
+            "v_template", torch.from_numpy(materialize(kwargs["v_template"]))
+        )  # [3889, 3]
+        self.register_buffer(
+            "posedirs",
+            torch.from_numpy(materialize(kwargs["posedirs"])).reshape(-1, 34 * 9).T,
+        )  # [34*9, 11667]
+        self.register_buffer(
+            "J_regressor",
+            torch.from_numpy(kwargs["J_regressor"].toarray().astype(np.float32)),
+        )  # [33, 3389]
+        self.register_buffer(
+            "lbs_weights", torch.from_numpy(materialize(kwargs["weights"]))
+        )  # [3889, 33]
+        self.register_buffer("faces", torch.from_numpy(materialize(kwargs["f"], dtype=np.int32)))  # [7774, 3]
 
         kintree_table = kwargs['kintree_table']
         self.register_buffer("parents", torch.from_numpy(kintree_table[0].astype(np.int32)))

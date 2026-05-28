@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation
 
@@ -7,10 +8,9 @@ by Xiaohang Yu, Ti Wang, and Mackenzie Weygandt Mathis
 Licensed under a modified MIT license
 """
 
-from __future__ import annotations
 
-# Minimal ``chumpy`` compatibility for unpickling legacy SMAL model configs.
+"""Minimal ``chumpy`` compatibility for unpickling legacy SMAL model configs."""
 
-from .ch import Ch, ChArray
+from .ch import Ch, ChArray, materialize
 
-__all__ = ["Ch", "ChArray"]
+__all__ = ["Ch", "ChArray", "materialize"]

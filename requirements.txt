@@ -5,7 +5,12 @@ torchvision==0.17.1
 #   pip install -r requirements.txt gradio[oauth,mcp]==6.x ...
 # and a pinned older gradio causes ResolutionImpossible. Local installs get Gradio from
 # scripts/clean_install_local.sh after this file, or from pyproject.toml for editable installs.
-deeplabcut
+# 3.x rc needed for ``pose_estimation_pytorch`` / SuperAnimal (2.3.x is TensorFlow-only).
+deeplabcut==3.0.0rc14
+# PyTables: use a wheel on macOS (DLC 2.x pinned 3.8.0 from source); Linux pip resolves normally.
+tables>=3.9.2,<3.11
+# Animal detector (needs torch installed first; local clean_install uses --no-build-isolation).
+detectron2 @ git+https://github.com/facebookresearch/detectron2.git
 pytorch-lightning==2.5.5
 yacs==0.1.8
 pyrender==0.1.45
