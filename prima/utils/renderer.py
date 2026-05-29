@@ -13,8 +13,10 @@ import os
 from ctypes.util import find_library
 
 if 'PYOPENGL_PLATFORM' not in os.environ and os.uname().sysname != 'Darwin':
-    # Prefer OSMesa; fall back to EGL where available.
-    os.environ['PYOPENGL_PLATFORM'] = 'osmesa' if find_library('OSMesa') else 'egl'
+    # Prefer EGL; PyOpenGL's OSMesa bindings can lack symbols required by pyrender.
+    os.environ['PYOPENGL_PLATFORM'] = 'egl' if find_library('EGL') else 'osmesa'
+    if os.environ['PYOPENGL_PLATFORM'] == 'egl':
+        os.environ.setdefault('EGL_PLATFORM', 'surfaceless')
 import torch
 import numpy as np
 import pyrender
@@ -438,5 +440,3 @@ class Renderer:
             if scene.has_node(node):
                 continue
             scene.add_node(node)
-
-

@@ -22,14 +22,17 @@ Gradio interface. The overall logic follows:
 """
 
 import argparse
+import concurrent.futures
 import os
+import queue
 import sys
 import tempfile
+import time
 import traceback
 from dataclasses import dataclass
 from functools import lru_cache
 from types import SimpleNamespace
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from pathlib import Path
 
 # macOS: keep compute single-threaded and run inference on main thread.
@@ -64,6 +67,8 @@ DEFAULT_HF_ASSET_REPO = DEFAULT_HF_REPO_ID
 
 # Output folder for rendered images/meshes and keypoints
 DEFAULT_OUT_FOLDER = "demo_out_tta_gradio"
+DEFAULT_SERVER_NAME = os.environ.get("PRIMA_GRADIO_HOST", "0.0.0.0")
+DEFAULT_SERVER_PORT = int(os.environ.get("PRIMA_GRADIO_PORT", "7860"))
 
 _D2_R50_CFG = "COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"
 _D2_R50_URL = (
@@ -124,8 +129,8 @@ LOCAL_DEMO_PROFILE = DemoProfile(
         ("demo_data/000000015956_horse.png", 1e-6, 30, 0.7, 0.1, False, True),
         ("demo_data/n02412080_12159.png", 1e-6, 30, 0.7, 0.1, False, True),
         ("demo_data/000000315905_zebra.jpg", 1e-6, 30, 0.7, 0.1, False, True),
-        ("demo_data/beagle.jpg", 1e-6, 0, 0.7, 0.1, False, True),
-        ("demo_data/shepherd_hati.jpg", 1e-6, 0, 0.7, 0.1, False, True),
+        ("demo_data/beagle.jpg", 1e-6, 30, 0.7, 0.1, False, True),
+        ("demo_data/shepherd_hati.jpg", 1e-6, 30, 0.7, 0.1, False, True),
     ),
     description=(
         "**Local demo** — full pipeline on your machine (GPU when available).\n\n"
@@ -144,20 +149,23 @@ SPACE_DEMO_PROFILE = DemoProfile(
     detectron_config_yaml=_D2_R50_CFG,
     detectron_weights_url=_D2_R50_URL,
     detectron_device="cpu",
-    default_tta_iters=0,
+    default_tta_iters=30,
     max_tta_iters=30,
     default_save_mesh=False,
     default_side_view=False,
     preload_assets=True,
     example_rows=(
-        ("demo_data/beagle.jpg", 1e-6, 0, 0.7, 0.1, False, False),
-        ("demo_data/000000015956_horse.png", 1e-6, 0, 0.7, 0.1, False, False),
-        ("demo_data/000000315905_zebra.jpg", 1e-6, 0, 0.7, 0.1, False, False),
+        ("demo_data/000000015956_horse.png", 1e-6, 30, 0.7, 0.1, False, False),
+        ("demo_data/n02412080_12159.png", 1e-6, 30, 0.7, 0.1, False, False),
+        ("demo_data/000000315905_zebra.jpg", 1e-6, 30, 0.7, 0.1, False, False),
+        ("demo_data/beagle.jpg", 1e-6, 30, 0.7, 0.1, False, False),
+        ("demo_data/shepherd_hati.jpg", 1e-6, 30, 0.7, 0.1, False, False),
     ),
     description=(
-        "**Hugging Face Space (cpu-basic)** — lightweight demo: **CPU-only**, Detectron2 **R50-FPN**, "
-        "PRIMA inference. TTA is optional (0 by default; increases runtime). Mesh `.obj` export is off "
-        "by default to save time and disk."
+        "**Hugging Face Space (cpu-basic)** — lightweight demo: **CPU-only** PRIMA inference. "
+        "The Space build skips Detectron2 and uses a full-image crop fallback. TTA is optional "
+        "(30 iterations by default, matching the local demo; set to 0 to skip). Mesh `.obj` export "
+        "is off by default to save time and disk."
     ),
     interface_title="PRIMA on Hugging Face — lightweight CPU demo",
 )
@@ -363,6 +371,7 @@ def _collect_animal_results(
     side_view: bool,
     save_mesh: bool,
     boxes: Optional[np.ndarray] = None,
+    progress_callback: Optional[Callable[[str], None]] = None,
 ) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray], str | None, str | None]:
     """Run detection + PRIMA + SuperAnimal + TTA on a single RGB image.
 
@@ -383,15 +392,25 @@ def _collect_animal_results(
         tta_optimize,
     )
 
+    def report(message: str) -> None:
+        if progress_callback is not None:
+            progress_callback(message)
+
     if int(tta_num_iters) > 0 and not SUPER_ANIMAL_ARGS.saved_2d_model_path:
+        report("Resolving SuperAnimal weights...")
         SUPER_ANIMAL_ARGS.saved_2d_model_path = resolve_sa_weights_path("")
 
     img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
     if boxes is None:
+        if detector is None:
+            report("Detectron2 unavailable; using full-image crop...")
+        else:
+            report("Detecting animals with Detectron2...")
         boxes = _detect_animal_boxes(detector, img_bgr, det_thresh)
     if boxes is None:
         return [], [], [], None, None
 
+    report(f"Detected {len(boxes)} animal(s). Preparing crops...")
     dataset = ViTDetDataset(model_cfg, img_bgr, boxes)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
 
@@ -403,9 +422,11 @@ def _collect_animal_results(
 
     img_token = next(tempfile._get_candidate_names())
 
-    for batch in dataloader:
+    total_batches = len(dataloader)
+    for batch_idx, batch in enumerate(dataloader, start=1):
         batch = recursive_to(batch, device)
 
+        report(f"Animal {batch_idx}/{total_batches}: running PRIMA...")
         with torch.no_grad():
             out_before = model(batch)
 
@@ -415,6 +436,7 @@ def _collect_animal_results(
         img_fn = f"{img_token}"
         from demo_tta import render_and_save  # imported lazily to avoid circular issues
 
+        report(f"Animal {batch_idx}/{total_batches}: rendering before TTA...")
         render_and_save(
             renderer,
             cam_crop_to_full_fn,
@@ -440,6 +462,7 @@ def _collect_animal_results(
                 before_mesh_paths.append(before_obj_path)
 
         if int(tta_num_iters) <= 0:
+            report(f"Animal {batch_idx}/{total_batches}: rendering final output...")
             render_and_save(
                 renderer,
                 cam_crop_to_full_fn,
@@ -466,6 +489,7 @@ def _collect_animal_results(
             continue
 
         # Prepare patch for SuperAnimal
+        report(f"Animal {batch_idx}/{total_batches}: running SuperAnimal keypoints...")
         patch_rgb = denorm_patch_to_rgb(batch["img"][0])
         with tempfile.TemporaryDirectory(prefix=f"dlc_{img_fn}_{animal_id}_") as tmp_dir:
             bodyparts_xyc = run_superanimal_on_patch(patch_rgb, SUPER_ANIMAL_ARGS, tmp_dir)
@@ -496,6 +520,7 @@ def _collect_animal_results(
         gt_kpts_norm = torch.from_numpy(kpts_norm[None]).to(device=device, dtype=batch["img"].dtype)
 
         # Run TTA
+        report(f"Animal {batch_idx}/{total_batches}: running TTA ({int(tta_num_iters)} iterations)...")
         out_after = tta_optimize(
             model,
             batch,
@@ -504,6 +529,7 @@ def _collect_animal_results(
             lr=float(tta_lr),
         )
 
+        report(f"Animal {batch_idx}/{total_batches}: rendering after TTA...")
         render_and_save(
             renderer,
             cam_crop_to_full_fn,
@@ -531,6 +557,7 @@ def _collect_animal_results(
     first_before_mesh = before_mesh_paths[0] if before_mesh_paths else None
     first_after_mesh = after_mesh_paths[0] if after_mesh_paths else None
 
+    report("Collecting outputs...")
     return before_imgs, after_imgs, kpt_imgs, first_before_mesh, first_after_mesh
 
 
@@ -633,25 +660,65 @@ def build_demo(
                 None,
                 None,
                 None,
-                f"Detected {len(boxes)} animal region(s). Running PRIMA (+ SuperAnimal/TTA if enabled)…",
+                f"Detected {len(boxes)} animal region(s). Running PRIMA (+ SuperAnimal/TTA if enabled)...",
             )
-            before_imgs, after_imgs, kpt_imgs, mesh_before, mesh_after = _collect_animal_results(
-                runtime_cache["model"],
-                runtime_cache["model_cfg"],
-                runtime_cache["renderer"],
-                runtime_cache["cam_crop_to_full_fn"],
-                runtime_cache["device"],
-                runtime_cache["detector"],
-                out_folder,
-                img_rgb,
-                tta_lr=tta_lr,
-                tta_num_iters=tta_num_iters,
-                det_thresh=det_thresh,
-                kp_conf_thresh=kp_conf_thresh,
-                side_view=side_view,
-                save_mesh=save_mesh,
-                boxes=boxes,
-            )
+
+            def run_collect(progress_callback: Optional[Callable[[str], None]] = None):
+                return _collect_animal_results(
+                    runtime_cache["model"],
+                    runtime_cache["model_cfg"],
+                    runtime_cache["renderer"],
+                    runtime_cache["cam_crop_to_full_fn"],
+                    runtime_cache["device"],
+                    runtime_cache["detector"],
+                    out_folder,
+                    img_rgb,
+                    tta_lr=tta_lr,
+                    tta_num_iters=tta_num_iters,
+                    det_thresh=det_thresh,
+                    kp_conf_thresh=kp_conf_thresh,
+                    side_view=side_view,
+                    save_mesh=save_mesh,
+                    boxes=boxes,
+                    progress_callback=progress_callback,
+                )
+
+            if _should_use_gradio_queue(profile):
+                stage_updates: queue.Queue[str] = queue.Queue()
+
+                def report_stage(message: str) -> None:
+                    stage_updates.put(message)
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    fut = pool.submit(
+                        run_collect,
+                        report_stage,
+                    )
+                    t0 = time.monotonic()
+                    latest_stage = "Starting inference..."
+                    while True:
+                        while True:
+                            try:
+                                latest_stage = stage_updates.get_nowait()
+                            except queue.Empty:
+                                break
+                            else:
+                                elapsed = int(time.monotonic() - t0)
+                                yield None, None, None, f"{latest_stage}\nElapsed: {elapsed}s"
+                        try:
+                            before_imgs, after_imgs, kpt_imgs, mesh_before, mesh_after = fut.result(
+                                timeout=1.0
+                            )
+                            break
+                        except concurrent.futures.TimeoutError:
+                            elapsed = int(time.monotonic() - t0)
+                            yield None, None, None, (
+                                f"{latest_stage}\n"
+                                f"Elapsed: {elapsed}s\n"
+                                "CPU inference can take several minutes."
+                            )
+            else:
+                before_imgs, after_imgs, kpt_imgs, mesh_before, mesh_after = run_collect()
         except Exception:
             yield None, None, None, f"Inference failed:\n{traceback.format_exc()}"
             return
@@ -743,6 +810,18 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_OUT_FOLDER,
         help="Folder used to save rendered outputs and meshes",
     )
+    parser.add_argument(
+        "--server_name",
+        type=str,
+        default=DEFAULT_SERVER_NAME,
+        help="Host/interface used by Gradio. Use 0.0.0.0 for Run:AI port-forward.",
+    )
+    parser.add_argument(
+        "--server_port",
+        type=int,
+        default=DEFAULT_SERVER_PORT,
+        help="Port used by Gradio.",
+    )
     return parser.parse_args()
 
 
@@ -763,4 +842,9 @@ if __name__ == "__main__":
         out_folder=args.out_folder,
         runtime_cache=runtime_cache,
     )
-    demo.launch(inbrowser=False)
+    demo.launch(
+        inbrowser=False,
+        ssr_mode=False,
+        server_name=args.server_name,
+        server_port=args.server_port,
+    )
