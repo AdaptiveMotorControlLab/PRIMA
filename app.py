@@ -68,6 +68,8 @@ DEFAULT_HF_ASSET_REPO = DEFAULT_HF_REPO_ID
 
 # Output folder for rendered images/meshes and keypoints
 DEFAULT_OUT_FOLDER = "demo_out_tta_gradio"
+DEFAULT_SERVER_NAME = os.environ.get("PRIMA_GRADIO_HOST", "0.0.0.0")
+DEFAULT_SERVER_PORT = int(os.environ.get("PRIMA_GRADIO_PORT", "7860"))
 
 _D2_R50_CFG = "COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"
 _D2_R50_URL = (
@@ -128,8 +130,8 @@ LOCAL_DEMO_PROFILE = DemoProfile(
         ("demo_data/000000015956_horse.png", 1e-6, 30, 0.7, 0.1, False, True),
         ("demo_data/n02412080_12159.png", 1e-6, 30, 0.7, 0.1, False, True),
         ("demo_data/000000315905_zebra.jpg", 1e-6, 30, 0.7, 0.1, False, True),
-        ("demo_data/beagle.jpg", 1e-6, 0, 0.7, 0.1, False, True),
-        ("demo_data/shepherd_hati.jpg", 1e-6, 0, 0.7, 0.1, False, True),
+        ("demo_data/beagle.jpg", 1e-6, 30, 0.7, 0.1, False, True),
+        ("demo_data/shepherd_hati.jpg", 1e-6, 30, 0.7, 0.1, False, True),
     ),
     description=(
         "**Local demo** — full pipeline on your machine (GPU when available).\n\n"
@@ -148,20 +150,23 @@ SPACE_DEMO_PROFILE = DemoProfile(
     detectron_config_yaml=_D2_R50_CFG,
     detectron_weights_url=_D2_R50_URL,
     detectron_device="cpu",
-    default_tta_iters=0,
+    default_tta_iters=30,
     max_tta_iters=30,
     default_save_mesh=False,
     default_side_view=False,
     preload_assets=True,
     example_rows=(
-        ("demo_data/beagle.jpg", 1e-6, 0, 0.7, 0.1, False, False),
-        ("demo_data/000000015956_horse.png", 1e-6, 0, 0.7, 0.1, False, False),
-        ("demo_data/000000315905_zebra.jpg", 1e-6, 0, 0.7, 0.1, False, False),
+        ("demo_data/000000015956_horse.png", 1e-6, 30, 0.7, 0.1, False, False),
+        ("demo_data/n02412080_12159.png", 1e-6, 30, 0.7, 0.1, False, False),
+        ("demo_data/000000315905_zebra.jpg", 1e-6, 30, 0.7, 0.1, False, False),
+        ("demo_data/beagle.jpg", 1e-6, 30, 0.7, 0.1, False, False),
+        ("demo_data/shepherd_hati.jpg", 1e-6, 30, 0.7, 0.1, False, False),
     ),
     description=(
         "**Hugging Face Space (cpu-basic)** — lightweight demo: **CPU-only** PRIMA inference. "
         "The Space build skips Detectron2 and uses a full-image crop fallback. TTA is optional "
-        "(0 by default; increases runtime). Mesh `.obj` export is off by default to save time and disk."
+        "(30 iterations by default, matching the local demo; set to 0 to skip). Mesh `.obj` export "
+        "is off by default to save time and disk."
     ),
     interface_title="PRIMA on Hugging Face — lightweight CPU demo",
 )
@@ -806,6 +811,18 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_OUT_FOLDER,
         help="Folder used to save rendered outputs and meshes",
     )
+    parser.add_argument(
+        "--server_name",
+        type=str,
+        default=DEFAULT_SERVER_NAME,
+        help="Host/interface used by Gradio. Use 0.0.0.0 for Run:AI port-forward.",
+    )
+    parser.add_argument(
+        "--server_port",
+        type=int,
+        default=DEFAULT_SERVER_PORT,
+        help="Port used by Gradio.",
+    )
     return parser.parse_args()
 
 
@@ -826,4 +843,9 @@ if __name__ == "__main__":
         out_folder=args.out_folder,
         runtime_cache=runtime_cache,
     )
-    demo.launch(inbrowser=False, ssr_mode=False)
+    demo.launch(
+        inbrowser=False,
+        ssr_mode=False,
+        server_name=args.server_name,
+        server_port=args.server_port,
+    )
