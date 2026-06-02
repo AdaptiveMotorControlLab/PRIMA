@@ -4,7 +4,7 @@ Copyright 2026 by Mackenzie Mathis, Xiaohang Yu, and contributors.
 
 Permission is hereby granted to you (hereafter "LICENSEE") a fully-paid, non-exclusive, and non-transferable license for academic, non-commercial purposes only (hereafter “LICENSE”) to use the "MODEL" weights (hereafter "MODEL"), subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software:
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the MODEL.
 
 This software may not be used to harm any animal deliberately.
 
