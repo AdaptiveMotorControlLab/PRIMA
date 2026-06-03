@@ -70,7 +70,7 @@ done
 README_FILE="${TMP}/README.md"
 REQ_FILE="${TMP}/requirements.txt"
 
-echo "[deploy] Removing Detectron2 from Space requirements (app falls back to full-image crops) ..."
+echo "[deploy] Removing Detectron2 from Space requirements (app falls back to SuperAnimal detection) ..."
 grep -vE '^[[:space:]]*detectron2([[:space:]]|@|$)' "$REQ_FILE" > "${REQ_FILE}.tmp"
 mv "${REQ_FILE}.tmp" "$REQ_FILE"
 
@@ -109,10 +109,37 @@ if [[ "$PUSH_URL" == https://huggingface.co/* && -z "${HF_TOKEN:-}" && -f "${HF_
   HF_TOKEN="$(<"${HF_HOME:-$HOME/.cache/huggingface}/token")"
 fi
 if [[ "$PUSH_URL" == https://huggingface.co/* && -n "${HF_TOKEN:-}" ]]; then
-  PUSH_URL="${PUSH_URL/https:\/\/huggingface.co/https:\/\/hf_user:${HF_TOKEN}@huggingface.co}"
+  export HF_TOKEN
+  git config credential.helper "store --file=${TMP}/git-credentials"
+  printf 'protocol=https\nhost=huggingface.co\nusername=hf_user\npassword=%s\n\n' "$HF_TOKEN" | git credential approve
+  ASKPASS="${TMP}/git-askpass.sh"
+  cat > "$ASKPASS" <<'SH'
+#!/usr/bin/env bash
+case "$1" in
+  *Username*) printf '%s\n' 'hf_user' ;;
+  *Password*) printf '%s\n' "${HF_TOKEN}" ;;
+  *) printf '%s\n' "${HF_TOKEN}" ;;
+esac
+SH
+  chmod 700 "$ASKPASS"
+  export GIT_ASKPASS="$ASKPASS"
 fi
 
 git remote add hf "$PUSH_URL"
+echo "[deploy] Uploading LFS objects to Hugging Face Space ..."
+mapfile -t LFS_OIDS < <(git lfs ls-files -l | awk '{print $1}')
+if [[ "${#LFS_OIDS[@]}" -gt 0 ]]; then
+  if ! GIT_TERMINAL_PROMPT=0 git lfs push --object-id hf "${LFS_OIDS[@]}"; then
+    echo "[deploy] ERROR: LFS upload failed. Ensure HF_TOKEN has write access to ${SPACE_URL}." >&2
+    exit 1
+  fi
+else
+  echo "[deploy] No LFS objects found in this snapshot."
+fi
+
 echo "[deploy] Force-pushing to Hugging Face Space ..."
-GIT_TERMINAL_PROMPT=0 git -c credential.helper= push hf HEAD:main --force
+# This deploy repo is freshly initialized, so older git-lfs pre-push hooks can
+# fail when they try to inspect the remote's previous main commit. LFS objects
+# are uploaded explicitly above; skip the hook for the Git ref update.
+GIT_TERMINAL_PROMPT=0 git push hf HEAD:main --force --no-verify
 echo "[deploy] Done."

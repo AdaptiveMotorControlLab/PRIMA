@@ -163,8 +163,8 @@ The `s1ckpt_inference.ckpt` checkpoint is downloaded automatically if missing.
 | | **Local** (`python app.py`) | **Hugging Face Space** |
 |--|--|--|
 | PRIMA device | GPU if available, else CPU | CPU only |
-| Detector | Detectron2 X-101-FPN | full-image crop fallback |
-| Default TTA iterations | 30 | 0 (PRIMA-only by default) |
+| Detector | Detectron2 X-101-FPN | DeepLabCut SuperAnimal detector |
+| Default TTA iterations | 30 | 30 |
 | Save `.obj` meshes | on | off |
 | Preload checkpoint at startup | off | on |
 
@@ -194,7 +194,7 @@ The script rsyncs only the Git-tracked files needed by the Space from the
 working tree (not `git archive`) so image files are materialized before
 `git add` turns them into LFS blobs.
 During deployment, `detectron2` is removed from the Space `requirements.txt`;
-the app uses its full-image crop fallback on the CPU Space.
+the app uses the DeepLabCut SuperAnimal detector fallback on the CPU Space.
 
 ---
 

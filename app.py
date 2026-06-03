@@ -163,9 +163,9 @@ SPACE_DEMO_PROFILE = DemoProfile(
     ),
     description=(
         "**Hugging Face Space (cpu-basic)** — lightweight demo: **CPU-only** PRIMA inference. "
-        "The Space build skips Detectron2 and uses a full-image crop fallback. TTA is optional "
-        "(30 iterations by default, matching the local demo; set to 0 to skip). Mesh `.obj` export "
-        "is off by default to save time and disk."
+        "The Space build skips Detectron2 and uses the DeepLabCut SuperAnimal detector for animal "
+        "crops. TTA is optional (30 iterations by default, matching the local demo; set to 0 to "
+        "skip). Mesh `.obj` export is off by default to save time and disk."
     ),
     interface_title="PRIMA on Hugging Face — lightweight CPU demo",
 )
@@ -298,7 +298,7 @@ def _build_detector(profile: Optional[DemoProfile] = None):
         import detectron2.engine
         from detectron2 import model_zoo
     except Exception as e:
-        print(f"[warn] Detectron2 unavailable ({type(e).__name__}: {e}); using full-image fallback bbox.")
+        print(f"[warn] Detectron2 unavailable ({type(e).__name__}: {e}); using SuperAnimal detector fallback.")
         return None
 
     if profile is None:
@@ -317,6 +317,84 @@ def _build_detector(profile: Optional[DemoProfile] = None):
     return detector
 
 
+def _filter_superanimal_boxes(
+    payload: Dict[str, Any],
+    det_thresh: float,
+    img_shape: Tuple[int, int],
+) -> Optional[np.ndarray]:
+    boxes = payload.get("bboxes")
+    if boxes is None:
+        return None
+
+    boxes = np.asarray(boxes, dtype=np.float32).reshape(-1, 4)
+    if len(boxes) == 0:
+        return None
+
+    scores = payload.get("bbox_scores")
+    if scores is None:
+        scores = np.ones((len(boxes),), dtype=np.float32)
+    scores = np.asarray(scores, dtype=np.float32).reshape(-1)
+    if len(scores) != len(boxes):
+        scores = np.ones((len(boxes),), dtype=np.float32)
+
+    h, w = img_shape
+    valid = (
+        (scores > float(det_thresh))
+        & np.isfinite(boxes).all(axis=1)
+        & (boxes[:, 2] > 0.0)
+        & (boxes[:, 3] > 0.0)
+    )
+    if not np.any(valid):
+        return None
+
+    xywh = boxes[valid]
+    scores = scores[valid]
+    boxes = xywh.copy()
+    boxes[:, 2] = xywh[:, 0] + xywh[:, 2]
+    boxes[:, 3] = xywh[:, 1] + xywh[:, 3]
+    boxes[:, [0, 2]] = np.clip(boxes[:, [0, 2]], 0.0, float(max(1, w - 1)))
+    boxes[:, [1, 3]] = np.clip(boxes[:, [1, 3]], 0.0, float(max(1, h - 1)))
+    valid_size = (boxes[:, 2] > boxes[:, 0]) & (boxes[:, 3] > boxes[:, 1])
+    boxes = boxes[valid_size]
+    scores = scores[valid_size]
+    if len(boxes) == 0:
+        return None
+    order = np.argsort(scores)[::-1]
+    return boxes[order].astype(np.float32, copy=False)
+
+
+def _detect_superanimal_boxes(img_rgb: np.ndarray, det_thresh: float) -> Optional[np.ndarray]:
+    try:
+        from deeplabcut.pose_estimation_pytorch.apis import superanimal_analyze_images
+    except Exception as e:
+        print(f"[warn] DeepLabCut SuperAnimal unavailable ({type(e).__name__}: {e}); no fallback bbox.")
+        return None
+
+    with tempfile.TemporaryDirectory(prefix="sa_detect_") as tmp_dir:
+        img_path = os.path.join(tmp_dir, "image.png")
+        cv2.imwrite(img_path, cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR))
+
+        dlc_device = "cuda" if torch.cuda.is_available() else "cpu"
+        preds = superanimal_analyze_images(
+            superanimal_name=SUPER_ANIMAL_ARGS.superanimal_name,
+            model_name=SUPER_ANIMAL_ARGS.superanimal_model_name,
+            detector_name=SUPER_ANIMAL_ARGS.superanimal_detector_name,
+            images=img_path,
+            max_individuals=SUPER_ANIMAL_ARGS.superanimal_max_individuals,
+            out_folder=tmp_dir,
+            progress_bar=False,
+            device=dlc_device,
+            pose_threshold=0.1,
+            bbox_threshold=float(det_thresh),
+            plot_skeleton=False,
+        )
+
+        payload = preds.get(img_path)
+        if payload is None:
+            return None
+        return _filter_superanimal_boxes(payload, det_thresh, img_rgb.shape[:2])
+
+
 def _load_model_and_detector_for_demo(checkpoint_path: str, profile: DemoProfile):
     """Load PRIMA and Detectron2 once for the Gradio session (main thread only)."""
     model, model_cfg, renderer, cam_crop_to_full_fn, device = _load_prima_model(checkpoint_path)
@@ -331,8 +409,8 @@ def _detect_animal_boxes(
 ) -> Optional[np.ndarray]:
     """Return Nx4 XYXY boxes or None if no animal detections."""
     if detector is None:
-        h, w = img_bgr.shape[:2]
-        return np.array([[0.0, 0.0, float(max(1, w - 1)), float(max(1, h - 1))]], dtype=np.float32)
+        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+        return _detect_superanimal_boxes(img_rgb, det_thresh)
 
     det_out = detector(img_bgr)
     det_instances = det_out["instances"]
@@ -403,7 +481,7 @@ def _collect_animal_results(
     img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
     if boxes is None:
         if detector is None:
-            report("Detectron2 unavailable; using full-image crop...")
+            report("Detectron2 unavailable; detecting animals with SuperAnimal...")
         else:
             report("Detecting animals with Detectron2...")
         boxes = _detect_animal_boxes(detector, img_bgr, det_thresh)

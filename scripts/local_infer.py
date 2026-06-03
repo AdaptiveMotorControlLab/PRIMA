@@ -71,9 +71,9 @@ def main() -> int:
     model, model_cfg, renderer, cam_crop_to_full_fn, device = app._load_prima_model()
     print(f"[local_infer] device={device}")
 
-    print("[local_infer] Building detector (Detectron2 if installed, else fallback) ...")
+    print("[local_infer] Building detector (Detectron2 if installed, else SuperAnimal fallback) ...")
     detector = app._build_detector()
-    print(f"[local_infer] detector={'detectron2' if detector is not None else 'fallback'}")
+    print(f"[local_infer] detector={'detectron2' if detector is not None else 'superanimal fallback'}")
 
     print("[local_infer] Running inference ...")
     before, after, kpts, mesh_before, mesh_after = app._collect_animal_results(

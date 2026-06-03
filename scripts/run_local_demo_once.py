@@ -37,9 +37,9 @@ def main() -> int:
     model, cfg, renderer, device = app._load_prima_model()
     print(f"      device={device}")
 
-    print("[2/4] Building detector (Detectron2 if installed, else full-image bbox) …")
+    print("[2/4] Building detector (Detectron2 if installed, else SuperAnimal detector) …")
     det = app._build_detector()
-    print(f"      detector={'detectron2' if det is not None else 'full-image fallback'}")
+    print(f"      detector={'detectron2' if det is not None else 'superanimal fallback'}")
 
     img = cv2.cvtColor(cv2.imread(str(img_path)), cv2.COLOR_BGR2RGB)
     print(f"[3/4] Running inference on {img_path.name} (TTA iterations=0) …")
