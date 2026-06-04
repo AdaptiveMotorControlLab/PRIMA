@@ -89,6 +89,14 @@ PRIMA_VENV=prima_env \
 source prima_env/bin/activate
 ```
 
+If macOS reports `Cannot read image: demo_data/...`, install Git LFS and pull
+the demo images:
+
+```bash
+git lfs install
+git lfs pull --include="demo_data/*"
+```
+
 ---
 
 ## Demo
