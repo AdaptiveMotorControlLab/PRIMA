@@ -124,9 +124,9 @@ resolve_torch_index_url() {
 echo "[clean-install] Repository: ${ROOT}"
 
 if ! PY="$(resolve_python)"; then
-  echo "[clean-install] ERROR: Need Python 3.10 or newer (Gradio 5 + app type hints)." >&2
-  echo "  macOS: brew install python@3.10" >&2
-  echo "  Then: PRIMA_PYTHON=/opt/homebrew/bin/python3.10 $0 ..." >&2
+  echo "[clean-install] ERROR: Need Python 3.10, 3.11, or 3.12 on PATH, or set PRIMA_PYTHON." >&2
+  echo "  Conda example: PRIMA_PYTHON=\$HOME/miniconda3/envs/prima/bin/python3.10 $0 ..." >&2
+  echo "  macOS example: brew install python@3.10 && PRIMA_PYTHON=/opt/homebrew/bin/python3.10 $0 ..." >&2
   exit 1
 fi
 echo "[clean-install] Using Python: $("$PY" -c 'import sys; print(sys.executable, sys.version.split()[0])')"

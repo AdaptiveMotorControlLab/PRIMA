@@ -63,18 +63,21 @@ cd PRIMA
 
 The helper script below creates a fresh virtual environment, installs runtime
 dependencies, pulls Git LFS assets if available, downloads the default demo
-checkpoints/data, and runs a smoke test:
+checkpoints/data, and verifies that the demo dependencies can be imported:
+
 
 ```bash
+PRIMA_PYTHON=/path/to/python3.10 \
+PRIMA_VENV=prima_env \
 ./scripts/clean_install_local.sh
-source .venv/bin/activate
+source prima_env/bin/activate
 ```
 
 Useful options:
 
-- `PRIMA_VENV=.venv ./scripts/clean_install_local.sh --skip-data` skips the large demo data download if `data/` is already populated.
-- `./scripts/clean_install_local.sh --wipe-data --force-data` removes downloaded demo assets and downloads them again.
-- `./scripts/clean_install_local.sh --no-editable` installs dependencies without registering the repo as an editable package.
+- `--skip-data` skips the large demo data download if `data/` is already populated.
+- `--wipe-data --force-data` removes downloaded demo assets and downloads them again.
+- `--no-editable` installs dependencies without registering the repo as an editable package.
 
 On macOS, install Python 3.10 if needed:
 
@@ -86,29 +89,6 @@ PRIMA_PYTHON=/opt/homebrew/bin/python3.10 ./scripts/clean_install_local.sh
 The installer uses `pip install --no-deps -e .` after installing
 `requirements.txt`, so the local `prima` package is registered without
 re-resolving the full dependency list.
-
-If you prefer to install manually from a clone:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -U pip wheel
-python -m pip install "setuptools<81" "packaging<25" "Cython<3"
-
-# Example for CUDA 11.8. Adjust this command for your CUDA version.
-python -m pip install --index-url https://download.pytorch.org/whl/cu118 \
-    "torch==2.2.1" "torchvision==0.17.1"
-
-python -m pip install -r requirements.txt
-python -m pip install --no-build-isolation \
-    "detectron2 @ git+https://github.com/facebookresearch/detectron2.git"
-python -m pip install --no-deps -e .
-python scripts/setup_demo_data.py
-```
-
-Detectron2 and DeepLabCut can take a while to install, especially on fresh
-machines. If Detectron2 fails to build, first confirm that PyTorch is installed
-and then install Detectron2 with `--no-build-isolation`.
 
 ---
 
