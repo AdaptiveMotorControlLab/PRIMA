@@ -68,7 +68,7 @@ resolve_python() {
     return 1
   fi
   local c p
-  for c in python3.12 python3.11 python3.10; do
+  for c in python3.10 python3.11; do
     if command -v "$c" >/dev/null 2>&1; then
       if "$c" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
         command -v "$c"
@@ -76,12 +76,16 @@ resolve_python() {
       fi
     fi
   done
-  for p in /opt/homebrew/bin/python3.10 /usr/local/bin/python3.10; do
+  for p in /opt/homebrew/bin/python3.10 /usr/local/bin/python3.10 /opt/homebrew/opt/python@3.10/bin/python3.10 /usr/local/opt/python@3.10/bin/python3.10; do
     if [[ -x "$p" ]]; then
       echo "$p"
       return 0
     fi
   done
+  if command -v python3.12 >/dev/null 2>&1; then
+    command -v python3.12
+    return 0
+  fi
   return 1
 }
 
@@ -152,6 +156,10 @@ source "${VENV}/bin/activate"
 python -m pip install --no-input -U pip wheel
 # Match requirements.txt / pyproject pins before pulling the rest
 python -m pip install --no-input "setuptools<81" "packaging<25" "Cython<3"
+python -m pip install --no-input "numpy==1.26.1"
+
+echo "[clean-install] xtcocotools (needs numpy available during build) ..."
+python -m pip install --no-input --no-build-isolation "xtcocotools==1.14.3"
 
 if TORCH_INDEX_URL="$(resolve_torch_index_url)"; then
   echo "[clean-install] Installing PyTorch from ${TORCH_INDEX_URL} ..."
@@ -161,7 +169,7 @@ fi
 
 echo "[clean-install] pip install -r requirements.txt (this can take a long time) ..."
 REQ_TMP="$(mktemp)"
-grep -vE '^[[:space:]]*(deeplabcut|detectron2)' "${ROOT}/requirements.txt" > "${REQ_TMP}"
+grep -vE '^[[:space:]]*(deeplabcut|detectron2|xtcocotools)' "${ROOT}/requirements.txt" > "${REQ_TMP}"
 python -m pip install --no-input -r "${REQ_TMP}"
 rm -f "${REQ_TMP}"
 

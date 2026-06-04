@@ -83,9 +83,11 @@ On macOS, install Python 3.10 if needed:
 
 ```bash
 brew install python@3.10
-PRIMA_PYTHON=/opt/homebrew/bin/python3.10 ./scripts/clean_install_local.sh
+PRIMA_PYTHON=/opt/homebrew/bin/python3.10 \
+PRIMA_VENV=prima_env \
+./scripts/clean_install_local.sh
+source prima_env/bin/activate
 ```
-
 
 ---
 
