@@ -203,12 +203,12 @@ if [[ "$WIPE_DATA" -eq 1 ]]; then
 fi
 
 if [[ "$SKIP_DATA" -eq 0 ]]; then
-  FORCE_ARGS=()
-  if [[ "$FORCE_DATA" -eq 1 ]]; then
-    FORCE_ARGS=(--force)
-  fi
   echo "[clean-install] Downloading demo assets (large) ..."
-  python "${ROOT}/scripts/setup_demo_data.py" "${FORCE_ARGS[@]}"
+  if [[ "$FORCE_DATA" -eq 1 ]]; then
+    python "${ROOT}/scripts/setup_demo_data.py" --force
+  else
+    python "${ROOT}/scripts/setup_demo_data.py"
+  fi
 else
   echo "[clean-install] Skipping setup_demo_data (--skip-data)."
 fi
