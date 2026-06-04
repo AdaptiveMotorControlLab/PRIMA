@@ -43,9 +43,10 @@ python -m pip install --no-build-isolation \
 python -m pip install --no-build-isolation \
       "git+https://github.com/facebookresearch/pytorch3d.git"
 
-# Install PRIMA from PyPI-test
+# Install PRIMA from PyPI-test (for now)
 pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple prima-animal==0.1.7
-# Instal PRIMA from PyPI
+
+# Install PRIMA from PyPI
 pip install prima-animal
 ```
 
@@ -67,20 +68,6 @@ checkpoints/data, and runs a smoke test:
 ```bash
 ./scripts/clean_install_local.sh
 source .venv/bin/activate
-```
-
-If your Python 3.10 executable is not on `PATH`, point the installer to it:
-
-```bash
-PRIMA_PYTHON=/path/to/python3.10 ./scripts/clean_install_local.sh
-```
-
-On Linux, the installer detects CUDA 11.8 and 12.1 with `nvcc` and installs the
-matching PyTorch 2.2.1 wheel before building Detectron2. You can override this
-manually, for example:
-
-```bash
-PRIMA_TORCH_INDEX_URL=https://download.pytorch.org/whl/cu118 ./scripts/clean_install_local.sh
 ```
 
 Useful options:

@@ -85,6 +85,42 @@ resolve_python() {
   return 1
 }
 
+resolve_torch_index_url() {
+  if [[ -n "${PRIMA_TORCH_INDEX_URL:-}" ]]; then
+    echo "${PRIMA_TORCH_INDEX_URL}"
+    return 0
+  fi
+
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    return 1
+  fi
+
+  if command -v nvcc >/dev/null 2>&1; then
+    local cuda_version
+    cuda_version="$(nvcc --version | sed -n 's/.*release \([0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' | head -n 1)"
+    case "${cuda_version}" in
+      11.8)
+        echo "https://download.pytorch.org/whl/cu118"
+        return 0
+        ;;
+      12.1)
+        echo "https://download.pytorch.org/whl/cu121"
+        return 0
+        ;;
+      "")
+        echo "[clean-install] WARN: Could not parse nvcc CUDA version; using pip default PyTorch wheel." >&2
+        return 1
+        ;;
+      *)
+        echo "[clean-install] WARN: CUDA ${cuda_version} detected; set PRIMA_TORCH_INDEX_URL if Detectron2 needs a specific PyTorch wheel." >&2
+        return 1
+        ;;
+    esac
+  fi
+
+  return 1
+}
+
 echo "[clean-install] Repository: ${ROOT}"
 
 if ! PY="$(resolve_python)"; then
@@ -116,6 +152,12 @@ source "${VENV}/bin/activate"
 python -m pip install --no-input -U pip wheel
 # Match requirements.txt / pyproject pins before pulling the rest
 python -m pip install --no-input "setuptools<81" "packaging<25" "Cython<3"
+
+if TORCH_INDEX_URL="$(resolve_torch_index_url)"; then
+  echo "[clean-install] Installing PyTorch from ${TORCH_INDEX_URL} ..."
+  python -m pip install --no-input --index-url "${TORCH_INDEX_URL}" \
+    "torch==2.2.1" "torchvision==0.17.1"
+fi
 
 echo "[clean-install] pip install -r requirements.txt (this can take a long time) ..."
 REQ_TMP="$(mktemp)"
