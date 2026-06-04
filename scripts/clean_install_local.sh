@@ -68,7 +68,7 @@ resolve_python() {
     return 1
   fi
   local c p
-  for c in python3.12 python3.11 python3.10; do
+  for c in python3.10 python3.11; do
     if command -v "$c" >/dev/null 2>&1; then
       if "$c" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
         command -v "$c"
@@ -76,21 +76,61 @@ resolve_python() {
       fi
     fi
   done
-  for p in /opt/homebrew/bin/python3.10 /usr/local/bin/python3.10; do
+  for p in /opt/homebrew/bin/python3.10 /usr/local/bin/python3.10 /opt/homebrew/opt/python@3.10/bin/python3.10 /usr/local/opt/python@3.10/bin/python3.10; do
     if [[ -x "$p" ]]; then
       echo "$p"
       return 0
     fi
   done
+  if command -v python3.12 >/dev/null 2>&1; then
+    command -v python3.12
+    return 0
+  fi
+  return 1
+}
+
+resolve_torch_index_url() {
+  if [[ -n "${PRIMA_TORCH_INDEX_URL:-}" ]]; then
+    echo "${PRIMA_TORCH_INDEX_URL}"
+    return 0
+  fi
+
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    return 1
+  fi
+
+  if command -v nvcc >/dev/null 2>&1; then
+    local cuda_version
+    cuda_version="$(nvcc --version | sed -n 's/.*release \([0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' | head -n 1)"
+    case "${cuda_version}" in
+      11.8)
+        echo "https://download.pytorch.org/whl/cu118"
+        return 0
+        ;;
+      12.1)
+        echo "https://download.pytorch.org/whl/cu121"
+        return 0
+        ;;
+      "")
+        echo "[clean-install] WARN: Could not parse nvcc CUDA version; using pip default PyTorch wheel." >&2
+        return 1
+        ;;
+      *)
+        echo "[clean-install] WARN: CUDA ${cuda_version} detected; set PRIMA_TORCH_INDEX_URL if Detectron2 needs a specific PyTorch wheel." >&2
+        return 1
+        ;;
+    esac
+  fi
+
   return 1
 }
 
 echo "[clean-install] Repository: ${ROOT}"
 
 if ! PY="$(resolve_python)"; then
-  echo "[clean-install] ERROR: Need Python 3.10 or newer (Gradio 5 + app type hints)." >&2
-  echo "  macOS: brew install python@3.10" >&2
-  echo "  Then: PRIMA_PYTHON=/opt/homebrew/bin/python3.10 $0 ..." >&2
+  echo "[clean-install] ERROR: Need Python 3.10, 3.11, or 3.12 on PATH, or set PRIMA_PYTHON." >&2
+  echo "  Conda example: PRIMA_PYTHON=\$HOME/miniconda3/envs/prima/bin/python3.10 $0 ..." >&2
+  echo "  macOS example: brew install python@3.10 && PRIMA_PYTHON=/opt/homebrew/bin/python3.10 $0 ..." >&2
   exit 1
 fi
 echo "[clean-install] Using Python: $("$PY" -c 'import sys; print(sys.executable, sys.version.split()[0])')"
@@ -116,10 +156,20 @@ source "${VENV}/bin/activate"
 python -m pip install --no-input -U pip wheel
 # Match requirements.txt / pyproject pins before pulling the rest
 python -m pip install --no-input "setuptools<81" "packaging<25" "Cython<3"
+python -m pip install --no-input "numpy==1.26.1"
+
+echo "[clean-install] xtcocotools (needs numpy available during build) ..."
+python -m pip install --no-input --no-build-isolation "xtcocotools==1.14.3"
+
+if TORCH_INDEX_URL="$(resolve_torch_index_url)"; then
+  echo "[clean-install] Installing PyTorch from ${TORCH_INDEX_URL} ..."
+  python -m pip install --no-input --index-url "${TORCH_INDEX_URL}" \
+    "torch==2.2.1" "torchvision==0.17.1"
+fi
 
 echo "[clean-install] pip install -r requirements.txt (this can take a long time) ..."
 REQ_TMP="$(mktemp)"
-grep -vE '^[[:space:]]*(deeplabcut|detectron2)' "${ROOT}/requirements.txt" > "${REQ_TMP}"
+grep -vE '^[[:space:]]*(deeplabcut|detectron2|xtcocotools)' "${ROOT}/requirements.txt" > "${REQ_TMP}"
 python -m pip install --no-input -r "${REQ_TMP}"
 rm -f "${REQ_TMP}"
 
@@ -153,12 +203,12 @@ if [[ "$WIPE_DATA" -eq 1 ]]; then
 fi
 
 if [[ "$SKIP_DATA" -eq 0 ]]; then
-  FORCE_ARGS=()
-  if [[ "$FORCE_DATA" -eq 1 ]]; then
-    FORCE_ARGS=(--force)
-  fi
   echo "[clean-install] Downloading demo assets (large) ..."
-  python "${ROOT}/scripts/setup_demo_data.py" "${FORCE_ARGS[@]}"
+  if [[ "$FORCE_DATA" -eq 1 ]]; then
+    python "${ROOT}/scripts/setup_demo_data.py" --force
+  else
+    python "${ROOT}/scripts/setup_demo_data.py"
+  fi
 else
   echo "[clean-install] Skipping setup_demo_data (--skip-data)."
 fi

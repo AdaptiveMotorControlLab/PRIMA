@@ -12,7 +12,7 @@ Xiaohang Yu, Ti Wang, Mackenzie Weygandt Mathis
 ---
 
 
-## 🚀 TL;DR
+## TL;DR
 PRIMA creates a 3D quadruped mesh from a single 2D image. It leverages BioCLIP-based biological priors for robust cross-species shape understanding, then applies test-time adaptation with 2D reprojection and auxiliary keypoint guidance to refine SMAL pose and shape predictions. 
 
 It further can be used to build Quadruped3D, a large-scale pseudo-3D dataset with diverse species and poses. 
@@ -21,15 +21,19 @@ PRIMA achieves state-of-the-art results on Animal3D, CtrlAni3D, Quadruped2D, and
 
 ## Installation
 
+PRIMA requires Python 3.10 or newer. A CUDA-enabled PyTorch installation is
+recommended for local inference and training.
+
 ### Install from PyPI
 
-> Recommended: Python 3.10 and a CUDA-enabled PyTorch installation.
+Create a clean environment, install PyTorch for your CUDA version, then install
+the package:
 
 ```bash
 conda create -n prima python=3.10 -y
 conda activate prima
 
-# Install PyTorch matching your CUDA (example: CUDA 11.8)
+# Example for CUDA 11.8. Adjust this command for your CUDA version.
 pip install --index-url https://download.pytorch.org/whl/cu118 \
     "torch==2.2.1" "torchvision==0.17.1" "torchaudio==2.2.1"
 
@@ -39,47 +43,59 @@ python -m pip install --no-build-isolation \
 python -m pip install --no-build-isolation \
       "git+https://github.com/facebookresearch/pytorch3d.git"
 
+# Install PRIMA from PyPI-test (for now)
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple prima-animal==0.1.7
+
 # Install PRIMA from PyPI
 pip install prima-animal
 ```
 
 `prima-animal` includes demo runtime dependencies used by `demo.py`, `demo_tta.py`, and `app.py` (including Detectron2 and DeepLabCut).
 
-### Clean install from this repository
+### Install from this repository
 
-Use these when developing from a **git clone** (not the PyPI wheel). The shell scripts are **non-interactive** (pip uses `--no-input`; `GIT_TERMINAL_PROMPT=0` for git). Put Hugging Face credentials in your environment or git credential helper before pushing the Space.
-
-**Local (fresh venv, LFS assets, Hub demo weights, smoke test)** — requires **Python 3.10+**
-(Gradio 5.1+ / Space-provided Gradio 6.x and `app.py` type hints). On macOS without `python3.10` on your `PATH`, install
-`brew install python@3.10` and set `PRIMA_PYTHON=/opt/homebrew/bin/python3.10`.
+Use this path if you want to run the code from a fresh clone.
 
 ```bash
-chmod +x scripts/clean_install_local.sh scripts/clean_redeploy_hf_space.sh scripts/deploy_hf_space.sh
-PRIMA_PYTHON=/opt/homebrew/bin/python3.10 ./scripts/clean_install_local.sh
+git clone https://github.com/AdaptiveMotorControlLab/PRIMA.git
+cd PRIMA
+```
+
+The helper script below creates a fresh virtual environment, installs runtime
+dependencies, pulls Git LFS assets if available, downloads the default demo
+checkpoints/data, and verifies that the demo dependencies can be imported:
+
+
+```bash
+PRIMA_PYTHON=/path/to/python3.10 \
+PRIMA_VENV=prima_env \
+./scripts/clean_install_local.sh
+source prima_env/bin/activate
 ```
 
 Options:
 
-- `PRIMA_VENV=.venv ./scripts/clean_install_local.sh --skip-data` — skip the large `setup_demo_data` download if `data/` is already populated.
-- `./scripts/clean_install_local.sh --wipe-data --force-data` — delete downloaded `data/` assets and redownload.
-- `./scripts/clean_install_local.sh --no-editable` — only `requirements.txt` (no `pip install -e .`); use if editable install fails and you will install the training stack via conda as in the PyPI section above. You still need **Python 3.10+** for Gradio 5.1+. The smoke test sets `PYTHONPATH` to the repo root so `import prima` works without an editable install.
-- **macOS / DeepLabCut:** `requirements.txt` pins `deeplabcut==3.0.0rc14`
-  for the SuperAnimal PyTorch API. On macOS, `clean_install_local.sh` installs
-  it separately after a compatible PyTables wheel (`tables>=3.9.2,<3.11`) to
-  avoid Apple Silicon build issues. Validate the local setup with
-  `./scripts/test_local_full.sh`.
+- `--skip-data` skips the large demo data download if `data/` is already populated.
+- `--wipe-data --force-data` removes downloaded demo assets and downloads them again.
+- `--no-editable` installs dependencies without registering the repo as an editable package.
 
-After `requirements.txt`, the script runs **`pip install --no-deps -e .`** so the `prima` package is registered without re-resolving `pyproject.toml` (which would pull **Detectron2** from git again). Install Detectron2 separately if needed: `pip install 'git+https://github.com/facebookresearch/detectron2.git'`.
-
-**Hugging Face Space (full redeploy from your working tree):**
-
-Requires [Git LFS / Xet](https://huggingface.co/docs/hub/xet/using-xet-storage#git) tooling (`brew install git-lfs git-xet`, `git xet install`, `git lfs install`). Then:
+On macOS, install Python 3.10 if needed:
 
 ```bash
-./scripts/clean_redeploy_hf_space.sh
+brew install python@3.10
+PRIMA_PYTHON=/opt/homebrew/bin/python3.10 \
+PRIMA_VENV=prima_env \
+./scripts/clean_install_local.sh
+source prima_env/bin/activate
 ```
 
-This is equivalent to `./scripts/deploy_hf_space.sh` and force-pushes a fresh snapshot to the Space.
+If macOS reports `Cannot read image: demo_data/...`, install Git LFS and pull
+the demo images:
+
+```bash
+git lfs install
+git lfs pull --include="demo_data/*"
+```
 
 ---
 
@@ -169,32 +185,6 @@ The `s1ckpt_inference.ckpt` checkpoint is downloaded automatically if missing.
 | Preload checkpoint at startup | off | on |
 
 Override for testing: `PRIMA_DEMO_MODE=local` or `PRIMA_DEMO_MODE=space`.
-
-#### Hugging Face Space (maintainers)
-
-Demo images under `demo_data/` and `images/teaser.png` are tracked with **Git LFS**
-(see `.gitattributes`) so they can be pushed to a Hugging Face Space under the Hub’s
-LFS / **Xet** bridge. Install tooling once:
-
-```bash
-brew install git-lfs git-xet
-git xet install
-git lfs install
-```
-
-Then from a clean checkout with LFS files present, redeploy the Space (same as `clean_redeploy_hf_space.sh`):
-
-```bash
-./scripts/deploy_hf_space.sh
-# or
-./scripts/clean_redeploy_hf_space.sh
-```
-
-The script rsyncs only the Git-tracked files needed by the Space from the
-working tree (not `git archive`) so image files are materialized before
-`git add` turns them into LFS blobs.
-During deployment, `detectron2` is removed from the Space `requirements.txt`;
-the app uses the DeepLabCut SuperAnimal detector fallback on the CPU Space.
 
 ---
 
