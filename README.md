@@ -73,7 +73,7 @@ PRIMA_VENV=prima_env \
 source prima_env/bin/activate
 ```
 
-Useful options:
+Options:
 
 - `--skip-data` skips the large demo data download if `data/` is already populated.
 - `--wipe-data --force-data` removes downloaded demo assets and downloads them again.
@@ -86,9 +86,6 @@ brew install python@3.10
 PRIMA_PYTHON=/opt/homebrew/bin/python3.10 ./scripts/clean_install_local.sh
 ```
 
-The installer uses `pip install --no-deps -e .` after installing
-`requirements.txt`, so the local `prima` package is registered without
-re-resolving the full dependency list.
 
 ---
 
