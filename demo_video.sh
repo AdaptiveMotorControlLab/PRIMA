@@ -11,5 +11,4 @@ python3 demo_video.py \
   --checkpoint "${checkpoint}" \
   --video_path "${video_path}" \
   --out_video demo_video_out.mp4 \
-  --out_folder demo_video_out/ \
   --rotate auto
