@@ -186,11 +186,13 @@ def main():
                             depth_norm = (depth_img - min_val) / (max_val - min_val + 1e-8)
                     depth_norm[~valid_mask] = 0
                     
-                    # fake color map using cv2
                     depth_vis = (depth_norm * 255).astype(np.uint8)
-                    depth_vis = cv2.applyColorMap(depth_vis, cv2.COLORMAP_COOL)
+                    depth_vis = cv2.applyColorMap(depth_vis, cv2.COLORMAP_VIRIDIS)
+                    depth_vis = cv2.cvtColor(depth_vis, cv2.COLOR_BGR2RGB)
                     depth_vis = depth_vis.astype(np.float32) / 255.0
-                    depth_vis[~valid_mask] = 0
+                    depth_vis[~valid_mask] = 0                    
+                    final_img = np.concatenate([final_img, depth_vis], axis=1)
+
 
                 cv2.imwrite(os.path.join(args.out_folder, f'{img_fn}_{animal_id}.png'), 
                             cv2.cvtColor((255 * final_img).astype(np.uint8), cv2.COLOR_RGB2BGR))
