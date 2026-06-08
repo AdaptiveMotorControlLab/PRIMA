@@ -165,6 +165,7 @@ cython_debug/
 
 # Directory
 .gradio/
+demo_data/*.mp4
 demo_out/
 demo_out*/
 data/PRIMA*/
