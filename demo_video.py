@@ -96,6 +96,10 @@ def make_empty_output_frame(frame_bgr, img_res, num_panels):
     return np.concatenate(panels, axis=1)
 
 
+def make_full_frame_output(frame_bgr):
+    return cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+
+
 def get_video_rotation(cap, rotate_arg):
     if rotate_arg != "auto":
         return rotate_arg
@@ -139,6 +143,8 @@ def main():
                         help="If set, render side view also")
     parser.add_argument("--render_depth", dest="render_depth", action="store_true", default=False,
                         help="If set, render depth map also")
+    parser.add_argument("--full_frame", dest="full_frame", action="store_true", default=False,
+                        help="Render the mesh overlay on the full video frame instead of crop-panel output")
     parser.add_argument("--save_mesh", dest="save_mesh", action="store_true", default=False,
                         help="If set, save one mesh per processed frame")
     parser.add_argument("--max_frames", type=int, default=-1,
@@ -197,11 +203,8 @@ def main():
 
     img_res = int(model_cfg.MODEL.IMAGE_SIZE)
     num_panels = 2 + int(args.side_view) + int(args.render_depth)
-    out_size = (img_res * num_panels, img_res)
-    writer = cv2.VideoWriter(args.out_video, cv2.VideoWriter_fourcc(*"mp4v"), fps, out_size)
-    if not writer.isOpened():
-        cap.release()
-        raise RuntimeError(f"Cannot open output video writer: {args.out_video}")
+    writer = None
+    out_size = None
 
     video_stem = Path(args.video_path).stem
     frame_idx = 0
@@ -233,7 +236,10 @@ def main():
             )
 
             if len(boxes) == 0:
-                final_img = make_empty_output_frame(frame_bgr, img_res, num_panels)
+                if args.full_frame:
+                    final_img = make_full_frame_output(frame_bgr)
+                else:
+                    final_img = make_empty_output_frame(frame_bgr, img_res, num_panels)
                 skipped_frames += 1
             else:
                 dataset = ViTDetDataset(model_cfg, frame_bgr, boxes)
@@ -255,42 +261,56 @@ def main():
                     scaled_focal_length,
                 ).detach().cpu().numpy()
 
-                white_img = (torch.ones_like(batch["img"][0]).cpu() - DEFAULT_MEAN[:, None, None] / 255) / (
-                    DEFAULT_STD[:, None, None] / 255
-                )
-                input_patch = (batch["img"][0].cpu() * DEFAULT_STD[:, None, None] + DEFAULT_MEAN[:, None, None]) / 255.0
-                input_patch = input_patch.permute(1, 2, 0).numpy()
-
-                regression_img = renderer(
-                    out["pred_vertices"][0].detach().cpu().numpy(),
-                    out["pred_cam_t"][0].detach().cpu().numpy(),
-                    batch["img"][0],
-                    mesh_base_color=GREEN,
-                    scene_bg_color=(1, 1, 1),
-                )
-                final_img = np.concatenate([input_patch, regression_img], axis=1)
-
-                if args.side_view:
-                    side_img = renderer(
+                if args.full_frame:
+                    frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+                    final_img = renderer(
                         out["pred_vertices"][0].detach().cpu().numpy(),
-                        out["pred_cam_t"][0].detach().cpu().numpy(),
-                        white_img,
+                        pred_cam_t_full[0],
+                        frame_rgb,
+                        full_frame=True,
                         mesh_base_color=GREEN,
                         scene_bg_color=(1, 1, 1),
-                        side_view=True,
+                        focal_length=float(scaled_focal_length.detach().cpu().numpy()),
                     )
-                    final_img = np.concatenate([final_img, side_img], axis=1)
+                else:
+                    white_img = (torch.ones_like(batch["img"][0]).cpu() - DEFAULT_MEAN[:, None, None] / 255) / (
+                        DEFAULT_STD[:, None, None] / 255
+                    )
+                    input_patch = (
+                        batch["img"][0].cpu() * DEFAULT_STD[:, None, None] + DEFAULT_MEAN[:, None, None]
+                    ) / 255.0
+                    input_patch = input_patch.permute(1, 2, 0).numpy()
 
-                if args.render_depth:
-                    depth_img = renderer(
+                    regression_img = renderer(
                         out["pred_vertices"][0].detach().cpu().numpy(),
                         out["pred_cam_t"][0].detach().cpu().numpy(),
-                        white_img,
+                        batch["img"][0],
                         mesh_base_color=GREEN,
                         scene_bg_color=(1, 1, 1),
-                        depth=True,
                     )
-                    final_img = np.concatenate([final_img, depth_to_viridis_rgb(depth_img)], axis=1)
+                    final_img = np.concatenate([input_patch, regression_img], axis=1)
+
+                    if args.side_view:
+                        side_img = renderer(
+                            out["pred_vertices"][0].detach().cpu().numpy(),
+                            out["pred_cam_t"][0].detach().cpu().numpy(),
+                            white_img,
+                            mesh_base_color=GREEN,
+                            scene_bg_color=(1, 1, 1),
+                            side_view=True,
+                        )
+                        final_img = np.concatenate([final_img, side_img], axis=1)
+
+                    if args.render_depth:
+                        depth_img = renderer(
+                            out["pred_vertices"][0].detach().cpu().numpy(),
+                            out["pred_cam_t"][0].detach().cpu().numpy(),
+                            white_img,
+                            mesh_base_color=GREEN,
+                            scene_bg_color=(1, 1, 1),
+                            depth=True,
+                        )
+                        final_img = np.concatenate([final_img, depth_to_viridis_rgb(depth_img)], axis=1)
 
                 if args.save_mesh:
                     verts = out["pred_vertices"][0].detach().cpu().numpy()
@@ -302,7 +322,12 @@ def main():
                 rendered_frames += 1
 
             frame_out = cv2.cvtColor((255 * final_img).astype(np.uint8), cv2.COLOR_RGB2BGR)
-            if (frame_out.shape[1], frame_out.shape[0]) != out_size:
+            if writer is None:
+                out_size = (frame_out.shape[1], frame_out.shape[0])
+                writer = cv2.VideoWriter(args.out_video, cv2.VideoWriter_fourcc(*"mp4v"), fps, out_size)
+                if not writer.isOpened():
+                    raise RuntimeError(f"Cannot open output video writer: {args.out_video}")
+            elif (frame_out.shape[1], frame_out.shape[0]) != out_size:
                 frame_out = cv2.resize(frame_out, out_size)
             writer.write(frame_out)
 
@@ -312,7 +337,8 @@ def main():
     finally:
         pbar.close()
         cap.release()
-        writer.release()
+        if writer is not None:
+            writer.release()
 
     print(
         f"[done] Processed {processed_frames} frame(s) from {args.video_path}; "
