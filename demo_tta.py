@@ -92,6 +92,27 @@ def save_keypoint_vis(patch_rgb: np.ndarray, kpts_xyc: np.ndarray, save_path: st
     cv2.imwrite(save_path, vis)
 
 
+def depth_to_viridis_rgb(depth_img: np.ndarray) -> np.ndarray:
+    valid_mask = depth_img > 0
+    if np.sum(valid_mask) == 0:
+        depth_norm = np.zeros_like(depth_img)
+    else:
+        min_val = np.min(depth_img[valid_mask])
+        max_val = np.max(depth_img[valid_mask])
+        if min_val == max_val:
+            depth_norm = np.zeros_like(depth_img)
+        else:
+            depth_norm = (depth_img - min_val) / (max_val - min_val + 1e-8)
+    depth_norm[~valid_mask] = 0
+
+    depth_vis = (depth_norm * 255).astype(np.uint8)
+    depth_vis = cv2.applyColorMap(depth_vis, cv2.COLORMAP_VIRIDIS)
+    depth_vis = cv2.cvtColor(depth_vis, cv2.COLOR_BGR2RGB)
+    depth_vis = depth_vis.astype(np.float32) / 255.0
+    depth_vis[~valid_mask] = 0
+    return depth_vis
+
+
 def resolve_sa_weights_path(local_path: str) -> str:
     """Return a local path to the fine-tuned SuperAnimal .pt snapshot.
 
@@ -162,7 +183,19 @@ def run_superanimal_on_patch(patch_rgb: np.ndarray, args, tmp_dir: str):
     return bodyparts[best_idx].astype(np.float32)
 
 
-def render_and_save(renderer, cam_crop_to_full_fn, out, batch, img_fn, animal_id, out_folder, suffix, side_view, save_mesh):
+def render_and_save(
+    renderer,
+    cam_crop_to_full_fn,
+    out,
+    batch,
+    img_fn,
+    animal_id,
+    out_folder,
+    suffix,
+    side_view,
+    save_mesh,
+    render_depth=False,
+):
     pred_cam = out['pred_cam']
     box_center = batch['box_center'].float()
     box_size = batch['box_size'].float()
@@ -194,6 +227,17 @@ def render_and_save(renderer, cam_crop_to_full_fn, out, batch, img_fn, animal_id
             side_view=True,
         )
         final_img = np.concatenate([final_img, side_img], axis=1)
+
+    if render_depth:
+        depth_img = renderer(
+            out['pred_vertices'][0].detach().cpu().numpy(),
+            out['pred_cam_t'][0].detach().cpu().numpy(),
+            white_img,
+            mesh_base_color=GREEN,
+            scene_bg_color=(1, 1, 1),
+            depth=True,
+        )
+        final_img = np.concatenate([final_img, depth_to_viridis_rgb(depth_img)], axis=1)
 
     cv2.imwrite(
         os.path.join(out_folder, f'{img_fn}_{animal_id}_{suffix}.png'),
@@ -252,6 +296,7 @@ def main():
     parser.add_argument('--img_folder', type=str, default='demo_data/', help='Folder with input images')
     parser.add_argument('--out_folder', type=str, default='demo_out_tta', help='Output folder')
     parser.add_argument('--side_view', dest='side_view', action='store_true', default=False, help='Render side view')
+    parser.add_argument('--render_depth', dest='render_depth', action='store_true', default=False, help='Render depth map')
     parser.add_argument('--save_mesh', dest='save_mesh', action='store_true', default=False, help='Save meshes')
     parser.add_argument('--file_type', nargs='+', default=['*.jpg', '*.png', '*.jpeg', '*.JPEG'], help='Image globs')
     parser.add_argument('--det_thresh', type=float, default=0.7, help='Detectron2 score threshold for animals')
@@ -348,6 +393,7 @@ def main():
                 suffix='before_tta',
                 side_view=args.side_view,
                 save_mesh=args.save_mesh,
+                render_depth=args.render_depth,
             )
 
             patch_rgb = denorm_patch_to_rgb(batch['img'][0])
@@ -392,6 +438,7 @@ def main():
                 suffix='after_tta',
                 side_view=args.side_view,
                 save_mesh=args.save_mesh,
+                render_depth=args.render_depth,
             )
 
 

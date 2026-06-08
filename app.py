@@ -81,8 +81,8 @@ _D2_X101_URL = (
     "faster_rcnn_X_101_32x8d_FPN_3x/139173657/model_final_68b088.pkl"
 )
 
-# Gradio example row: (image_rel, tta_lr, tta_iters, det_thresh, kp_thresh, side_view, save_mesh)
-ExampleRow = Tuple[str, float, int, float, float, bool, bool]
+# Gradio example row: (image_rel, tta_lr, tta_iters, det_thresh, kp_thresh, side_view, render_depth, save_mesh)
+ExampleRow = Tuple[str, float, int, float, float, bool, bool, bool]
 
 
 @dataclass(frozen=True)
@@ -98,6 +98,7 @@ class DemoProfile:
     max_tta_iters: int
     default_save_mesh: bool
     default_side_view: bool
+    default_render_depth: bool
     preload_assets: bool
     example_rows: Tuple[ExampleRow, ...]
     description: str
@@ -124,13 +125,14 @@ LOCAL_DEMO_PROFILE = DemoProfile(
     max_tta_iters=100,
     default_save_mesh=True,
     default_side_view=False,
+    default_render_depth=False,
     preload_assets=False,
     example_rows=(
-        ("demo_data/000000015956_horse.png", 1e-6, 30, 0.7, 0.1, False, True),
-        ("demo_data/n02412080_12159.png", 1e-6, 30, 0.7, 0.1, False, True),
-        ("demo_data/000000315905_zebra.jpg", 1e-6, 30, 0.7, 0.1, False, True),
-        ("demo_data/beagle.jpg", 1e-6, 30, 0.7, 0.1, False, True),
-        ("demo_data/shepherd_hati.jpg", 1e-6, 30, 0.7, 0.1, False, True),
+        ("demo_data/000000015956_horse.png", 1e-6, 30, 0.7, 0.1, False, False, True),
+        ("demo_data/n02412080_12159.png", 1e-6, 30, 0.7, 0.1, False, False, True),
+        ("demo_data/000000315905_zebra.jpg", 1e-6, 30, 0.7, 0.1, False, False, True),
+        ("demo_data/beagle.jpg", 1e-6, 30, 0.7, 0.1, False, False, True),
+        ("demo_data/shepherd_hati.jpg", 1e-6, 30, 0.7, 0.1, False, False, True),
     ),
     description=(
         "**Local demo** — full pipeline on your machine (GPU when available).\n\n"
@@ -153,13 +155,14 @@ SPACE_DEMO_PROFILE = DemoProfile(
     max_tta_iters=30,
     default_save_mesh=False,
     default_side_view=False,
+    default_render_depth=False,
     preload_assets=True,
     example_rows=(
-        ("demo_data/000000015956_horse.png", 1e-6, 30, 0.7, 0.1, False, False),
-        ("demo_data/n02412080_12159.png", 1e-6, 30, 0.7, 0.1, False, False),
-        ("demo_data/000000315905_zebra.jpg", 1e-6, 30, 0.7, 0.1, False, False),
-        ("demo_data/beagle.jpg", 1e-6, 30, 0.7, 0.1, False, False),
-        ("demo_data/shepherd_hati.jpg", 1e-6, 30, 0.7, 0.1, False, False),
+        ("demo_data/000000015956_horse.png", 1e-6, 30, 0.7, 0.1, False, False, False),
+        ("demo_data/n02412080_12159.png", 1e-6, 30, 0.7, 0.1, False, False, False),
+        ("demo_data/000000315905_zebra.jpg", 1e-6, 30, 0.7, 0.1, False, False, False),
+        ("demo_data/beagle.jpg", 1e-6, 30, 0.7, 0.1, False, False, False),
+        ("demo_data/shepherd_hati.jpg", 1e-6, 30, 0.7, 0.1, False, False, False),
     ),
     description=(
         "**Hugging Face Space (cpu-basic)** — lightweight demo: **CPU-only** PRIMA inference. "
@@ -447,6 +450,7 @@ def _collect_animal_results(
     det_thresh: float,
     kp_conf_thresh: float,
     side_view: bool,
+    render_depth: bool,
     save_mesh: bool,
     boxes: Optional[np.ndarray] = None,
     progress_callback: Optional[Callable[[str], None]] = None,
@@ -526,6 +530,7 @@ def _collect_animal_results(
             suffix="before_tta",
             side_view=side_view,
             save_mesh=save_mesh,
+            render_depth=render_depth,
         )
 
         before_png_path = os.path.join(out_folder, f"{img_fn}_{animal_id}_before_tta.png")
@@ -552,6 +557,7 @@ def _collect_animal_results(
                 suffix="after_tta",
                 side_view=side_view,
                 save_mesh=save_mesh,
+                render_depth=render_depth,
             )
 
             after_png_path = os.path.join(out_folder, f"{img_fn}_{animal_id}_after_tta.png")
@@ -619,6 +625,7 @@ def _collect_animal_results(
             suffix="after_tta",
             side_view=side_view,
             save_mesh=save_mesh,
+            render_depth=render_depth,
         )
 
         after_png_path = os.path.join(out_folder, f"{img_fn}_{animal_id}_after_tta.png")
@@ -670,6 +677,7 @@ def build_demo(
         det_thresh: float,
         kp_conf_thresh: float,
         side_view: bool,
+        render_depth: bool,
         save_mesh: bool,
     ):
         """Wrapper for Gradio. ``image`` is an RGB numpy array.
@@ -756,6 +764,7 @@ def build_demo(
                     det_thresh=det_thresh,
                     kp_conf_thresh=kp_conf_thresh,
                     side_view=side_view,
+                    render_depth=render_depth,
                     save_mesh=save_mesh,
                     boxes=boxes,
                     progress_callback=progress_callback,
@@ -855,6 +864,7 @@ def build_demo(
                 step=0.05,
             ),
             gr.Checkbox(label="Render side view", value=profile.default_side_view),
+            gr.Checkbox(label="Render depth map", value=profile.default_render_depth),
             gr.Checkbox(label="Save meshes (.obj)", value=profile.default_save_mesh),
         ],
         outputs=[

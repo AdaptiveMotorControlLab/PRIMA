@@ -12,4 +12,5 @@ python3 demo_tta.py \
   --img_folder demo_data/ \
   --out_folder demo_out_tta/ \
   --tta_lr 1e-6 \
-  --tta_num_iters 30
+  --tta_num_iters 30 \
+  --render_depth
