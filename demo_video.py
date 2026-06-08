@@ -1,8 +1,10 @@
 """
-PRIMA video demo: run Stage 1 inference frame-by-frame on a video.
+PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation
 
-For each frame, Detectron2 animal detections are filtered by class and score,
-then only the highest-confidence bounding box is passed to PRIMA.
+Official implementation of the paper:
+"PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation"
+by Xiaohang Yu, Ti Wang, and Mackenzie Weygandt Mathis
+Licensed under a modified MIT license
 """
 
 from pathlib import Path
