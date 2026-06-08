@@ -196,9 +196,13 @@ class Renderer:
         """
 
         if full_frame:
-            
-            image = cv2.imread(imgname)
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.
+            if imgname is not None:
+                image = cv2.imread(imgname)
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.
+            else:
+                image = image.astype(np.float32)
+                if image.max() > 1.0:
+                    image = image / 255.0
         else:
             image = (image.clone()) * (torch.tensor(self.cfg.MODEL.IMAGE_STD, device=image.device).reshape(3, 1, 1))
             image = image + torch.tensor(self.cfg.MODEL.IMAGE_MEAN, device=image.device).reshape(3, 1, 1)
