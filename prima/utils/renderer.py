@@ -183,6 +183,7 @@ class Renderer:
                  return_rgba=False,
                  depth = False,
                  focal_length: Optional[float] = None,
+                 supersample: int = 1,
                  ) -> np.array:
         """
         Render meshes on input image
@@ -208,8 +209,19 @@ class Renderer:
             image = image + torch.tensor(self.cfg.MODEL.IMAGE_MEAN, device=image.device).reshape(3, 1, 1)
             image = image.permute(1, 2, 0).cpu().numpy()
 
-        # Use custom focal length if provided, otherwise use default
+        original_height, original_width = image.shape[:2]
+        supersample = max(1, int(supersample))
+        if supersample > 1:
+            image = cv2.resize(
+                image,
+                (original_width * supersample, original_height * supersample),
+                interpolation=cv2.INTER_LINEAR,
+            )
+
+        # Use custom focal length if provided, otherwise use default. Scale the
+        # intrinsics with the render target when antialiasing by supersampling.
         focal_length_to_use = focal_length if focal_length is not None else self.focal_length
+        focal_length_to_use *= supersample
         
         try:
             renderer = pyrender.OffscreenRenderer(
@@ -273,6 +285,12 @@ class Renderer:
             output_img = color[:, :, :3]
 
         output_img = output_img.astype(np.float32)
+        if supersample > 1:
+            output_img = cv2.resize(
+                output_img,
+                (original_width, original_height),
+                interpolation=cv2.INTER_AREA,
+            )
         return output_img
 
     def vertices_to_trimesh(self, vertices, camera_translation, mesh_base_color=(1.0, 1.0, 0.9),
