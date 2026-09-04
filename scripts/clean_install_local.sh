@@ -199,7 +199,7 @@ fi
 
 if [[ "$WIPE_DATA" -eq 1 ]]; then
   echo "[clean-install] Wiping downloaded demo data under data/ ..."
-  rm -rf "${ROOT}/data/PRIMAS1" "${ROOT}/data/PRIMAS3" "${ROOT}/data/smal" "${ROOT}/data/amr_vitbb.pth" 2>/dev/null || true
+  rm -rf "${ROOT}/data/PRIMA" "${ROOT}/data/smal" "${ROOT}/data/amr_vitbb.pth" 2>/dev/null || true
 fi
 
 if [[ "$SKIP_DATA" -eq 0 ]]; then

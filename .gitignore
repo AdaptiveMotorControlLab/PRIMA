@@ -175,3 +175,18 @@ logs/
 *.pth
 *.pkl
 datasets/
+
+# Local demo / evaluation output folders (not part of the release)
+demo_data_raw*/
+*_mesh_overlays/
+*_mesh_overlays_pyrender/
+detect_overlay_and_side/
+no_detect_overlay_and_side/
+requested_animal_kingdom_*/
+demo_video_out/
+flagged/
+
+# Local one-off driver scripts (not part of the release)
+eval_onebyone.py
+run_demo_data_raw_detect.py
+run_fauna_examples_no_detect.py

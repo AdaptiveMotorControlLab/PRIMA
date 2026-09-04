@@ -1,8 +1,8 @@
-# Default PRIMA Stage 1 inference checkpoint:
-#   data/PRIMAS1/checkpoints/s1ckpt_inference.ckpt
+# Default PRIMA inference checkpoint:
+#   data/PRIMA/checkpoints/best_inference.ckpt
 #
 # If this local file is missing, it will be downloaded from the PRIMA Hugging Face repo.
-checkpoint='data/PRIMAS1/checkpoints/s1ckpt_inference.ckpt'
+checkpoint='data/PRIMA/checkpoints/best_inference.ckpt'
 
 # Update this to your video path before running.
 video_path='demo_data/hati.mp4'

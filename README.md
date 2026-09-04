@@ -103,34 +103,40 @@ git lfs pull --include="demo_data/*"
 
 ### Checkpoints and data
 
-The demo scripts auto-download their default Stage 1 PRIMA assets from Hugging
-Face when the checkpoint or matching Hydra config is missing. If you want to
-pre-download all necessary checkpoints and data ahead of time, run:
+The demo scripts auto-download the PRIMA assets from Hugging Face when the
+checkpoint or matching Hydra config is missing. If you want to pre-download all
+necessary checkpoints and data ahead of time, run:
 
 ```bash
 python scripts/setup_demo_data.py --hf-repo-id MLAdaptiveIntelligence/PRIMA
 ```
 
-Approximate default prefetch volume from Hugging Face is ~5.5 GB total
-(`s1ckpt_inference.ckpt` ~3 GB + `amr_vitbb.pth` ~2.5 GB + SMAL files).
+Approximate prefetch volume from Hugging Face is ~6.4 GB total
+(`best_inference.ckpt` ~3.8 GB + `amr_vitbb.pth` ~2.5 GB + SMAL files).
 Expected time is roughly:
-- 100 Mbps: ~7-10 minutes
-- 300 Mbps: ~2-4 minutes
+- 100 Mbps: ~9-12 minutes
+- 300 Mbps: ~3-5 minutes
 - 1 Gbps: ~1 minute
 
-Existing files are reused by default; pass `--force` only if you need to redownload them. If you also need the Stage 3 pretrained model, add `--include-stage3`.
+Existing files are reused by default; pass `--force` only if you need to redownload them.
 
 Expected files in that Hugging Face repo root:
 - `my_smpl_00781_4_all.pkl`
 - `my_smpl_data_00781_4_all.pkl`
 - `walking_toy_symmetric_pose_prior_with_cov_35parts.pkl`
 - `amr_vitbb.pth`
-- `config_s1_HYDRA.yaml`
-- `s1ckpt_inference.ckpt`
+- `config.yaml`
+- `best_inference.ckpt`
 
-Optional Stage 3 prefetch expects:
-- `config_s3_HYDRA.yaml`
-- `s3ckpt_inference.ckpt`
+They are arranged locally as:
+```
+data/
+├── amr_vitbb.pth
+├── smal/
+└── PRIMA/
+    ├── .hydra/config.yaml
+    └── checkpoints/best_inference.ckpt
+```
 
 ### Demo (without TTA)
 
@@ -166,13 +172,13 @@ browser:
 
 ```bash
 python app.py \
-  --checkpoint data/PRIMAS1/checkpoints/s1ckpt_inference.ckpt \
+  --checkpoint data/PRIMA/checkpoints/best_inference.ckpt \
   --out_folder demo_out_tta_gradio/
 ```
 
 This starts a local Gradio app (by default on http://127.0.0.1:7860), where
 you can upload images and visualize PRIMA predictions and adaptation results.
-The `s1ckpt_inference.ckpt` checkpoint is downloaded automatically if missing.
+The `best_inference.ckpt` checkpoint is downloaded automatically if missing.
 
 `app.py` picks a **demo profile** automatically:
 
@@ -210,8 +216,8 @@ Training outputs are written to `logs/train/runs/<exp_name>/`.
 
 ```bash
 python eval.py \
-  --config data/PRIMAS1/.hydra/config.yaml \
-  --checkpoint data/PRIMAS1/checkpoints/s1ckpt_inference.ckpt
+  --config data/PRIMA/.hydra/config.yaml \
+  --checkpoint data/PRIMA/checkpoints/best_inference.ckpt
 ```
 
 Common values for `--dataset` are controlled by:

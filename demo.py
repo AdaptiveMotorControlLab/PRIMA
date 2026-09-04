@@ -49,7 +49,7 @@ def load_renderer_components():
 def main():
     parser = argparse.ArgumentParser(description='prima demo code')
     parser.add_argument('--checkpoint', type=str, default='',
-                        help='Path to pretrained model checkpoint. Empty -> auto-download the default Stage 1 checkpoint.')
+                        help='Path to pretrained model checkpoint. Empty -> auto-download the default PRIMA checkpoint.')
     parser.add_argument('--hf-repo-id', '--hf_repo_id', dest='hf_repo_id',
                         type=str, default=os.environ.get("PRIMA_HF_REPO_ID", DEFAULT_HF_REPO_ID),
                         help='Hugging Face repo ID containing PRIMA demo assets')

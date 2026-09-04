@@ -62,7 +62,7 @@ from prima.utils.detection import select_animal_boxes
 
 
 # Default checkpoint path following README instructions
-DEFAULT_CHECKPOINT = str(_REPO_ROOT / "data" / "PRIMAS1" / "checkpoints" / "s1ckpt_inference.ckpt")
+DEFAULT_CHECKPOINT = str(_REPO_ROOT / "data" / "PRIMA" / "checkpoints" / "best_inference.ckpt")
 DEFAULT_HF_ASSET_REPO = DEFAULT_HF_REPO_ID
 
 # Output folder for rendered images/meshes and keypoints

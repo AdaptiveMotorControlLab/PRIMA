@@ -12,13 +12,14 @@ from __future__ import annotations
 import os
 import shutil
 from pathlib import Path
-from typing import Iterable, Optional, Sequence, Union
+from typing import Optional, Union
 
 HF_REPO_ID = "MLAdaptiveIntelligence/PRIMA"
 DEFAULT_HF_REPO_ID = HF_REPO_ID
 
-DEFAULT_STAGE1_CHECKPOINT = Path("data/PRIMAS1/checkpoints/s1ckpt_inference.ckpt")
-DEFAULT_STAGE3_CHECKPOINT = Path("data/PRIMAS3/checkpoints/s3ckpt_inference.ckpt")
+MODEL_DIR_NAME = "PRIMA"
+CHECKPOINT_FILENAME = "best_inference.ckpt"
+DEFAULT_CHECKPOINT = Path("data") / MODEL_DIR_NAME / "checkpoints" / CHECKPOINT_FILENAME
 
 SMAL_ASSET_PATHS = [
     "my_smpl_00781_4_all.pkl",
@@ -26,20 +27,10 @@ SMAL_ASSET_PATHS = [
     "walking_toy_symmetric_pose_prior_with_cov_35parts.pkl",
 ]
 BACKBONE_ASSET_PATH = "amr_vitbb.pth"
-STAGE1_CONFIG_ASSET_PATH = "config_s1_HYDRA.yaml"
-STAGE1_CHECKPOINT_ASSET_PATH = "s1ckpt_inference.ckpt"
-STAGE3_CONFIG_ASSET_PATH = "config_s3_HYDRA.yaml"
-STAGE3_CHECKPOINT_ASSET_PATH = "s3ckpt_inference.ckpt"
+CONFIG_ASSET_PATH = "config.yaml"
+CHECKPOINT_ASSET_PATH = "best_inference.ckpt"
 
-STAGE_ASSETS = {
-    "PRIMAS1": (STAGE1_CONFIG_ASSET_PATH, STAGE1_CHECKPOINT_ASSET_PATH, "s1ckpt_inference.ckpt"),
-    "PRIMAS3": (STAGE3_CONFIG_ASSET_PATH, STAGE3_CHECKPOINT_ASSET_PATH, "s3ckpt_inference.ckpt"),
-}
-
-STAGE_CHECKPOINTS = {
-    "PRIMAS1": Path("PRIMAS1/checkpoints/s1ckpt_inference.ckpt"),
-    "PRIMAS3": Path("PRIMAS3/checkpoints/s3ckpt_inference.ckpt"),
-}
+RELATIVE_CHECKPOINT = Path(MODEL_DIR_NAME) / "checkpoints" / CHECKPOINT_FILENAME
 
 PathLike = Union[str, Path]
 
@@ -49,7 +40,7 @@ def _resolve_hf_repo_id(hf_repo_id: Optional[str]) -> str:
 
 
 def _default_checkpoint_path(data_dir: PathLike = "data") -> Path:
-    return Path(data_dir) / STAGE_CHECKPOINTS["PRIMAS1"]
+    return Path(data_dir) / RELATIVE_CHECKPOINT
 
 
 def _config_path_for_checkpoint(checkpoint_path: PathLike) -> Path:
@@ -57,18 +48,14 @@ def _config_path_for_checkpoint(checkpoint_path: PathLike) -> Path:
     return checkpoint_path.parent.parent / ".hydra" / "config.yaml"
 
 
-def _stage_for_checkpoint(checkpoint_path: PathLike) -> Optional[str]:
+def _is_default_checkpoint(checkpoint_path: PathLike) -> bool:
+    """True if the path follows the standard ``<data>/PRIMA/checkpoints/`` layout."""
     checkpoint_path = Path(checkpoint_path)
     if len(checkpoint_path.parents) < 2:
-        return None
-    stage_name = checkpoint_path.parent.parent.name
-    stage_assets = STAGE_ASSETS.get(stage_name)
-    if stage_assets is None:
-        return None
-    _, _, checkpoint_name = stage_assets
-    if checkpoint_path.name != checkpoint_name:
-        return None
-    return stage_name
+        return False
+    if checkpoint_path.parent.parent.name != MODEL_DIR_NAME:
+        return False
+    return checkpoint_path.name == CHECKPOINT_FILENAME
 
 
 def _download_file(
@@ -172,21 +159,15 @@ def _ensure_smal_assets(data_dir: Path, force: bool, hf_repo_id: str) -> None:
     print(f"[ok] {smal_dir}")
 
 
-def _ensure_stage_assets(
-    stage_name: str,
+def _ensure_model_assets(
     data_dir: Path,
     force: bool,
     hf_repo_id: str,
     validate_existing: bool = True,
 ) -> None:
-    if stage_name not in STAGE_ASSETS:
-        known = ", ".join(sorted(STAGE_ASSETS))
-        raise ValueError(f"Unknown PRIMA stage '{stage_name}'. Expected one of: {known}")
-
-    config_asset_path, checkpoint_asset_path, checkpoint_name = STAGE_ASSETS[stage_name]
-    stage_dir = data_dir / stage_name
-    config_target = stage_dir / ".hydra" / "config.yaml"
-    checkpoint_target = stage_dir / "checkpoints" / checkpoint_name
+    model_dir = data_dir / MODEL_DIR_NAME
+    config_target = model_dir / ".hydra" / "config.yaml"
+    checkpoint_target = model_dir / "checkpoints" / CHECKPOINT_FILENAME
     redownload_checkpoint = False
 
     if config_target.exists() and checkpoint_target.exists() and not force:
@@ -194,66 +175,49 @@ def _ensure_stage_assets(
             try:
                 _validate_torch_checkpoint(checkpoint_target)
             except RuntimeError:
-                print(f"[warn] {stage_name} checkpoint is incomplete, redownloading checkpoint only.")
+                print("[warn] PRIMA checkpoint is incomplete, redownloading checkpoint only.")
                 redownload_checkpoint = True
             else:
-                print(f"[skip] {stage_name} assets already exist")
+                print("[skip] PRIMA model assets already exist")
                 return
         else:
-            print(f"[skip] {stage_name} assets already exist")
+            print("[skip] PRIMA model assets already exist")
             return
 
-    print(f"[download] {stage_name} assets")
+    print("[download] PRIMA model assets")
     config_target.parent.mkdir(parents=True, exist_ok=True)
     checkpoint_target.parent.mkdir(parents=True, exist_ok=True)
     if force or not config_target.exists():
-        _download_file(hf_repo_id, config_asset_path, config_target, force_download=force)
+        _download_file(hf_repo_id, CONFIG_ASSET_PATH, config_target, force_download=force)
     if redownload_checkpoint and checkpoint_target.exists():
         checkpoint_target.unlink()
     if force or redownload_checkpoint or not checkpoint_target.exists():
         _download_file(
             hf_repo_id,
-            checkpoint_asset_path,
+            CHECKPOINT_ASSET_PATH,
             checkpoint_target,
             force_download=force or redownload_checkpoint,
         )
     _validate_torch_checkpoint(checkpoint_target)
-    print(f"[ok] {stage_dir}")
+    print(f"[ok] {model_dir}")
 
 
-def _normalize_stages(stages: Union[str, Iterable[str]]) -> Sequence[str]:
-    if isinstance(stages, str):
-        return (stages,)
-    return tuple(stages)
-
-
-def _verify_assets(data_dir: Path, stages: Sequence[str]) -> None:
+def _verify_assets(data_dir: Path) -> None:
+    model_dir = data_dir / MODEL_DIR_NAME
     required_paths = [
         data_dir / "smal" / "my_smpl_00781_4_all.pkl",
         data_dir / "smal" / "my_smpl_data_00781_4_all.pkl",
         data_dir / "smal" / "walking_toy_symmetric_pose_prior_with_cov_35parts.pkl",
         data_dir / "amr_vitbb.pth",
+        model_dir / ".hydra" / "config.yaml",
+        model_dir / "checkpoints" / CHECKPOINT_FILENAME,
     ]
-    for stage_name in stages:
-        if stage_name not in STAGE_ASSETS:
-            known = ", ".join(sorted(STAGE_ASSETS))
-            raise ValueError(f"Unknown PRIMA stage '{stage_name}'. Expected one of: {known}")
-        _, _, checkpoint_name = STAGE_ASSETS[stage_name]
-        stage_dir = data_dir / stage_name
-        required_paths.extend(
-            [
-                stage_dir / ".hydra" / "config.yaml",
-                stage_dir / "checkpoints" / checkpoint_name,
-            ]
-        )
 
     missing = [p for p in required_paths if not p.exists()]
     if missing:
         raise FileNotFoundError("Missing required files:\n" + "\n".join(str(p) for p in missing))
 
-    for stage_name in stages:
-        _, _, checkpoint_name = STAGE_ASSETS[stage_name]
-        _validate_torch_checkpoint(data_dir / stage_name / "checkpoints" / checkpoint_name)
+    _validate_torch_checkpoint(model_dir / "checkpoints" / CHECKPOINT_FILENAME)
 
 
 def _ensure_assets_for_checkpoint(
@@ -263,8 +227,7 @@ def _ensure_assets_for_checkpoint(
 ) -> None:
     checkpoint_path = Path(checkpoint_path)
     config_path = _config_path_for_checkpoint(checkpoint_path)
-    stage_name = _stage_for_checkpoint(checkpoint_path)
-    if stage_name is None:
+    if not _is_default_checkpoint(checkpoint_path):
         if checkpoint_path.exists() and config_path.exists() and not force:
             print(f"[skip] Using local PRIMA checkpoint {checkpoint_path}")
             return
@@ -272,10 +235,9 @@ def _ensure_assets_for_checkpoint(
             "Missing checkpoint or config for a custom path:\n"
             f"  checkpoint: {checkpoint_path}\n"
             f"  config: {config_path}\n"
-            "Auto-download supports the standard PRIMA demo layouts only:\n"
-            "  data/PRIMAS1/checkpoints/s1ckpt_inference.ckpt\n"
-            "  data/PRIMAS3/checkpoints/s3ckpt_inference.ckpt\n"
-            "Pass one of those paths, or download/copy your custom checkpoint manually."
+            "Auto-download supports the standard PRIMA demo layout only:\n"
+            f"  data/{MODEL_DIR_NAME}/checkpoints/{CHECKPOINT_FILENAME}\n"
+            "Pass that path, or download/copy your custom checkpoint manually."
         )
 
     data_dir = checkpoint_path.parent.parent.parent
@@ -283,8 +245,7 @@ def _ensure_assets_for_checkpoint(
     print(f"[download] Ensuring PRIMA demo assets under {data_dir}")
     _ensure_smal_assets(data_dir, force=force, hf_repo_id=repo_id)
     _ensure_backbone(data_dir, force=force, hf_repo_id=repo_id)
-    _ensure_stage_assets(
-        stage_name,
+    _ensure_model_assets(
         data_dir,
         force=force,
         hf_repo_id=repo_id,
@@ -295,7 +256,6 @@ def _ensure_assets_for_checkpoint(
 def ensure_demo_assets(
     data_dir: PathLike = "data",
     *,
-    stages: Union[str, Iterable[str]] = ("PRIMAS1",),
     force: bool = False,
     hf_repo_id: Optional[str] = None,
 ) -> None:
@@ -303,13 +263,11 @@ def ensure_demo_assets(
     data_dir = Path(data_dir).resolve()
     data_dir.mkdir(parents=True, exist_ok=True)
     repo_id = _resolve_hf_repo_id(hf_repo_id)
-    selected_stages = _normalize_stages(stages)
 
     _ensure_smal_assets(data_dir, force=force, hf_repo_id=repo_id)
     _ensure_backbone(data_dir, force=force, hf_repo_id=repo_id)
-    for stage_name in selected_stages:
-        _ensure_stage_assets(stage_name, data_dir, force=force, hf_repo_id=repo_id)
-    _verify_assets(data_dir, selected_stages)
+    _ensure_model_assets(data_dir, force=force, hf_repo_id=repo_id)
+    _verify_assets(data_dir)
 
 
 def resolve_prima_checkpoint_path(
@@ -328,9 +286,8 @@ def resolve_prima_checkpoint_path(
 
 
 __all__ = [
+    "DEFAULT_CHECKPOINT",
     "DEFAULT_HF_REPO_ID",
-    "DEFAULT_STAGE1_CHECKPOINT",
-    "DEFAULT_STAGE3_CHECKPOINT",
     "HF_REPO_ID",
     "ensure_demo_assets",
     "resolve_prima_checkpoint_path",
