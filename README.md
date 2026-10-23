@@ -13,11 +13,12 @@ Xiaohang Yu, Ti Wang, Mackenzie Weygandt Mathis
 
 
 ## TL;DR
-PRIMA creates a 3D quadruped mesh from a single 2D image. It leverages BioCLIP-based taxonomic priors for robust cross-species shape understanding, then applies test-time adaptation with 2D reprojection and auxiliary keypoint guidance to refine SMAL pose and shape predictions. 
+PRIMA (**PRI**ors for **M**esh **A**daptation) recovers articulated 3D quadruped meshes from a single image, targeting the long tail of species and poses that small 3D-annotated datasets miss. It has two components:
 
-It further can be used to build Quadruped3D, a large-scale pseudo-3D dataset with diverse species and poses. 
+- **Taxonomic shape priors.** Shape priors derived from BioCLIP image features, which are learned under taxonomic supervision, inject species-level knowledge into SMAL mesh reconstruction and improve shape estimation across diverse quadrupeds.
+- **Adaptation-driven data bootstrapping.** Lightweight instance-level mesh refinement (test-time adaptation with 2D reprojection and keypoint guidance) and quality-aware filtering turn abundant 2D animal annotations into reliable pseudo-3D supervision. This yields **Quadruped3D**, a large-scale pseudo-3D dataset of about 9K annotations built from real-world animal images.
 
-PRIMA achieves state-of-the-art results on Animal3D, CtrlAni3D, Quadruped2D, and Animal Kingdom datasets.
+PRIMA achieves state-of-the-art mesh reconstruction on Animal3D, CtrlAni3D, Quadruped2D, and Animal Kingdom, with particularly strong gains on challenging poses and underrepresented species.
 
 ## Installation
 

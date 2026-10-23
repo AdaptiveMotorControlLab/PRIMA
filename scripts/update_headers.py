@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation
+PRIMA: Boosting Animal Mesh Recovery with Taxonomic Priors and Adaptation-Driven Data Bootstrapping
 
 Official implementation of the paper:
-"PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation"
+"PRIMA: Boosting Animal Mesh Recovery with Taxonomic Priors and Adaptation-Driven Data Bootstrapping"
 by Xiaohang Yu, Ti Wang, and Mackenzie Weygandt Mathis
 Licensed under a modified MIT license
 """
@@ -14,10 +14,10 @@ from pathlib import Path
 
 # Define the standard header for the project
 STANDARD_HEADER = '''"""
-PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation
+PRIMA: Boosting Animal Mesh Recovery with Taxonomic Priors and Adaptation-Driven Data Bootstrapping
 
 Official implementation of the paper:
-"PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation"
+"PRIMA: Boosting Animal Mesh Recovery with Taxonomic Priors and Adaptation-Driven Data Bootstrapping"
 by Xiaohang Yu, Ti Wang, and Mackenzie Weygandt Mathis
 Licensed under a modified MIT license
 """'''
@@ -65,7 +65,7 @@ def has_header(content):
         return True
     
     required_elements = [
-        'PRIMA: Boosting Animal Mesh Recovery with Biological Priors',
+        'PRIMA: Boosting Animal Mesh Recovery with Taxonomic Priors',
         'Xiaohang Yu, Ti Wang, and Mackenzie Weygandt Mathis',
         'Licensed under a modified MIT license',
     ]
