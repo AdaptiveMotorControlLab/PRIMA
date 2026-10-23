@@ -1,9 +1,9 @@
-# PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation
+# PRIMA: Boosting Animal Mesh Recovery with Taxonomic Priors and Adaptation-Driven Data Bootstrapping
 
 
 This is the official implementation of the approach described in the preprint:
 
-PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation \
+PRIMA: Boosting Animal Mesh Recovery with Taxonomic Priors and Adaptation-Driven Data Bootstrapping \
 Xiaohang Yu, Ti Wang, Mackenzie Weygandt Mathis
 
 ![PRIMA teaser](images/teaser.png)
@@ -13,7 +13,7 @@ Xiaohang Yu, Ti Wang, Mackenzie Weygandt Mathis
 
 
 ## TL;DR
-PRIMA creates a 3D quadruped mesh from a single 2D image. It leverages BioCLIP-based biological priors for robust cross-species shape understanding, then applies test-time adaptation with 2D reprojection and auxiliary keypoint guidance to refine SMAL pose and shape predictions. 
+PRIMA creates a 3D quadruped mesh from a single 2D image. It leverages BioCLIP-based taxonomic priors for robust cross-species shape understanding, then applies test-time adaptation with 2D reprojection and auxiliary keypoint guidance to refine SMAL pose and shape predictions. 
 
 It further can be used to build Quadruped3D, a large-scale pseudo-3D dataset with diverse species and poses. 
 
@@ -243,7 +243,7 @@ If you use this code in your research, please cite our PRIMA paper.
 
 ```bibtex
 @misc{yu_prima,
-  title={PRIMA: Boosting Animal Mesh Recovery with Biological Priors and Test-Time Adaptation},
+  title={PRIMA: Boosting Animal Mesh Recovery with Taxonomic Priors and Adaptation-Driven Data Bootstrapping},
   author={Xiaohang Yu and Ti Wang and Mackenzie Weygandt Mathis},
 }
 ```
