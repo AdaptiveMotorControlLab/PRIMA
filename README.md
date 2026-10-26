@@ -16,7 +16,7 @@ Xiaohang Yu, Ti Wang, Mackenzie Weygandt Mathis
 PRIMA (**PRI**ors for **M**esh **A**daptation) recovers articulated 3D quadruped meshes from a single image, targeting the long tail of species and poses that small 3D-annotated datasets miss. It has two components:
 
 - **Taxonomic shape priors.** Shape priors derived from BioCLIP image features, which are learned under taxonomic supervision, inject species-level knowledge into SMAL mesh reconstruction and improve shape estimation across diverse quadrupeds.
-- **Adaptation-driven data bootstrapping.** Lightweight instance-level mesh refinement (test-time adaptation with 2D reprojection and keypoint guidance) and quality-aware filtering turn abundant 2D animal annotations into reliable pseudo-3D supervision. This yields **Quadruped3D**, a large-scale pseudo-3D dataset of about 9K annotations built from real-world animal images.
+- **Adaptation-driven data bootstrapping.** Lightweight instance-level mesh refinement (per-instance adaptation with 2D reprojection and keypoint guidance) and quality-aware filtering turn abundant 2D animal annotations into reliable pseudo-3D supervision. This yields **Quadruped3D**, a large-scale pseudo-3D dataset of about 9K annotations built from real-world animal images.
 
 PRIMA achieves state-of-the-art mesh reconstruction on Animal3D, CtrlAni3D, Quadruped2D, and Animal Kingdom, with particularly strong gains on challenging poses and underrepresented species.
 
@@ -154,7 +154,7 @@ checkpoint path.
 
 ### Demo (with TTA)
 
-Run PRIMA inference with test-time adaptation:
+Run PRIMA inference with adaptation:
 
 ```bash
 bash demo_tta.sh
